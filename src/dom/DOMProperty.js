@@ -34,6 +34,8 @@ var DOMPropertyInjection = {
   HAS_BOOLEAN_VALUE: 0x8,
   HAS_POSITIVE_NUMERIC_VALUE: 0x10,
   MUST_USE_NAMESPACED_ATTRIBUTE: 0x20,
+  PRESERVE_NAME: 0x40,
+  DASHERIZE_NAME: 0x80,
 
   /**
    * Inject some specialized knowledge about the DOM. This takes a config object
@@ -88,15 +90,23 @@ var DOMPropertyInjection = {
 
       DOMProperty.isStandardName[propName] = true;
 
-      var lowerCased = propName.toLowerCase();
-      DOMProperty.getPossibleStandardName[lowerCased] = propName;
+      var propConfig = Properties[propName];
 
       var attributeName = DOMAttributeNames[propName];
-      if (attributeName) {
-        DOMProperty.getPossibleStandardName[attributeName] = propName;
+      if (!attributeName) {
+        if (propConfig & DOMPropertyInjection.DASHERIZE_NAME) {
+          attributeName = propName
+            .replace(/([a-z\d])([A-Z])/g, '$1-$2')
+            .toLowerCase();
+        } else if (propConfig & DOMPropertyInjection.PRESERVE_NAME) {
+          attributeName = propName;
+        } else {
+          attributeName = propName.toLowerCase();
+        }
       }
 
-      DOMProperty.getAttributeName[propName] = attributeName || lowerCased;
+      DOMProperty.getPossibleStandardName[attributeName] = propName;
+      DOMProperty.getAttributeName[propName] = attributeName;
 
       DOMProperty.getPropertyName[propName] =
         DOMPropertyNames[propName] || propName;
@@ -111,7 +121,6 @@ var DOMPropertyInjection = {
         DOMProperty.getAttributeNamespace[propName] = attributeNamespace;
       }
 
-      var propConfig = Properties[propName];
       DOMProperty.mustUseAttribute[propName] =
         propConfig & DOMPropertyInjection.MUST_USE_ATTRIBUTE;
       DOMProperty.mustUseProperty[propName] =
@@ -147,6 +156,12 @@ var DOMPropertyInjection = {
         !DOMProperty.mustUseAttribute[propName] ||
           !DOMProperty.mustUseNamespacedAttribute[propName],
         'DOMProperty: Cannot use both attribute and namespaced attribute: %s',
+        propName
+      );
+      invariant(
+        !DOMProperty.mustUseNamespacedAttribute[propName] ||
+          !DOMProperty.mustUseProperty[propName],
+        'DOMProperty: Cannot use both namespaced attribute and property: %s',
         propName
       );
       invariant(
