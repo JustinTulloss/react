@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ describe('ReactChildren', function() {
 
 
   it('should support identity for simple', function() {
-    var callback = jasmine.createSpy().andCallFake(function (kid, index) {
+    var callback = jasmine.createSpy().andCallFake(function(kid, index) {
       return kid;
     });
 
@@ -49,7 +49,7 @@ describe('ReactChildren', function() {
   });
 
   it('should treat single arrayless child as being in array', function() {
-    var callback = jasmine.createSpy().andCallFake(function (kid, index) {
+    var callback = jasmine.createSpy().andCallFake(function(kid, index) {
       return kid;
     });
 
@@ -64,7 +64,7 @@ describe('ReactChildren', function() {
   });
 
   it('should treat single child in array as expected', function() {
-    var callback = jasmine.createSpy().andCallFake(function (kid, index) {
+    var callback = jasmine.createSpy().andCallFake(function(kid, index) {
       return kid;
     });
 
@@ -79,7 +79,7 @@ describe('ReactChildren', function() {
   });
 
   it('should pass key to returned component', function() {
-    var mapFn = function (kid, index) {
+    var mapFn = function(kid, index) {
       return <div>{kid}</div>;
     };
 
@@ -92,12 +92,12 @@ describe('ReactChildren', function() {
     expect(mappedKeys.length).toBe(1);
     expect(mappedChildren[mappedKeys[0]]).not.toBe(simpleKid);
     expect(mappedChildren[mappedKeys[0]].props.children).toBe(simpleKid);
-    expect(mappedKeys[0]).toBe('{simple}');
+    expect(mappedKeys[0]).toBe('.$simple');
   });
 
   it('should invoke callback with the right context', function() {
     var lastContext;
-    var callback = function (kid, index) {
+    var callback = function(kid, index) {
       lastContext = this;
       return this;
     };
@@ -130,7 +130,7 @@ describe('ReactChildren', function() {
     var threeMapped = <span />; // Map from null to something.
     var fourMapped = <div key="keyFour" />;
 
-    var callback = jasmine.createSpy().andCallFake(function (kid, index) {
+    var callback = jasmine.createSpy().andCallFake(function(kid, index) {
       return index === 0 ? zeroMapped :
         index === 1 ? oneMapped :
         index === 2 ? twoMapped :
@@ -162,7 +162,7 @@ describe('ReactChildren', function() {
     expect(mappedKeys.length).toBe(5);
     // Keys default to indices.
     expect(mappedKeys).toEqual(
-      ['{keyZero}', '[1]', '{keyTwo}', '[3]', '{keyFour}']
+      ['.$keyZero', '.1', '.$keyTwo', '.3', '.$keyFour']
     );
 
     expect(callback).toHaveBeenCalledWith(zero, 0);
@@ -202,7 +202,7 @@ describe('ReactChildren', function() {
     var fourMapped = <div key="keyFour" />;
     var fiveMapped = <div />;
 
-    var callback = jasmine.createSpy().andCallFake(function (kid, index) {
+    var callback = jasmine.createSpy().andCallFake(function(kid, index) {
       return index === 0 ? zeroMapped :
         index === 1 ? oneMapped :
         index === 2 ? twoMapped :
@@ -235,12 +235,12 @@ describe('ReactChildren', function() {
     expect(mappedKeys.length).toBe(6);
     // Keys default to indices.
     expect(mappedKeys).toEqual([
-      '[0]{firstHalfKey}[0]{keyZero}',
-      '[0]{firstHalfKey}[0][1]',
-      '[0]{firstHalfKey}[0]{keyTwo}',
-      '[0]{secondHalfKey}[0][0]',
-      '[0]{secondHalfKey}[0]{keyFour}',
-      '[0]{keyFive}{keyFiveInner}'
+      '.0:$firstHalfKey:0:$keyZero',
+      '.0:$firstHalfKey:0:1',
+      '.0:$firstHalfKey:0:$keyTwo',
+      '.0:$secondHalfKey:0:0',
+      '.0:$secondHalfKey:0:$keyFour',
+      '.0:$keyFive:$keyFiveInner'
     ]);
 
     expect(callback).toHaveBeenCalledWith(zero, 0);
@@ -282,15 +282,15 @@ describe('ReactChildren', function() {
       </div>
     );
 
-    var expectedForcedKeys = ['{keyZero}', '{keyOne}'];
+    var expectedForcedKeys = ['.$keyZero', '.$keyOne'];
     var mappedChildrenForcedKeys =
       ReactChildren.map(forcedKeys.props.children, mapFn);
     var mappedForcedKeys = Object.keys(mappedChildrenForcedKeys);
     expect(mappedForcedKeys).toEqual(expectedForcedKeys);
 
     var expectedRemappedForcedKeys = [
-      '{{keyZero^C}{giraffe}',
-      '{{keyOne^C}[0]'
+      '.$=1$keyZero:$giraffe',
+      '.$=1$keyOne:0'
     ];
     var remappedChildrenForcedKeys =
       ReactChildren.map(mappedChildrenForcedKeys, mapFn);
@@ -320,17 +320,19 @@ describe('ReactChildren', function() {
     }).not.toThrow();
   });
 
-  it('should throw if key provided is a dupe with explicit key', function() {
+  it('should warn if key provided is a dupe with explicit key', function() {
     var zero = <div key="something"/>;
-    var one = <div key="something" />;
+    var one = <span key="something" />;
 
-    var mapFn = function() {return null;};
+    var mapFn = function(component) { return component; };
     var instance = (
       <div>{zero}{one}</div>
     );
 
-    expect(function() {
-      ReactChildren.map(instance.props.children, mapFn);
-    }).toThrow();
+    spyOn(console, 'warn');
+    var mapped = ReactChildren.map(instance.props.children, mapFn);
+
+    expect(console.warn.calls.length).toEqual(1);
+    expect(mapped).toEqual({'.$something': zero});
   });
 });

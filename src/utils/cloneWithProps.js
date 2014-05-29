@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,11 @@
 
 var ReactPropTransferer = require('ReactPropTransferer');
 
+var keyOf = require('keyOf');
+var warning = require('warning');
+
+var CHILDREN_PROP = keyOf({children: null});
+
 /**
  * Sometimes you want to change the props of a child passed to you. Usually
  * this is to add a CSS class.
@@ -32,18 +37,25 @@ var ReactPropTransferer = require('ReactPropTransferer');
  */
 function cloneWithProps(child, props) {
   if (__DEV__) {
-    if (child.props.ref) {
-      console.warn(
-        'You are calling cloneWithProps() on a child with a ref. This is ' +
-        'dangerous because you\'re creating a new child which will not be ' +
-        'added as a ref to its parent.'
-      );
-    }
+    warning(
+      !child.props.ref,
+      'You are calling cloneWithProps() on a child with a ref. This is ' +
+      'dangerous because you\'re creating a new child which will not be ' +
+      'added as a ref to its parent.'
+    );
   }
 
-  return child.constructor.ConvenienceConstructor(
-    ReactPropTransferer.mergeProps(child.props, props)
-  );
+  var newProps = ReactPropTransferer.mergeProps(props, child.props);
+
+  // Use `child.props.children` if it is provided.
+  if (!newProps.hasOwnProperty(CHILDREN_PROP) &&
+      child.props.hasOwnProperty(CHILDREN_PROP)) {
+    newProps.children = child.props.children;
+  }
+
+  // The current API doesn't retain _owner and _context, which is why this
+  // doesn't use ReactDescriptor.cloneAndReplaceProps.
+  return child.constructor(newProps);
 }
 
 module.exports = cloneWithProps;

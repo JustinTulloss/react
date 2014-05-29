@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,9 @@ var _uppercasePattern = /([A-Z])/g;
  *
  *   > hyphenate('backgroundColor')
  *   < "background-color"
+ *
+ * For CSS style names, use `hyphenateStyleName` instead which works properly
+ * with all vendor prefixes, including `ms`.
  *
  * @param {string} string
  * @return {string}

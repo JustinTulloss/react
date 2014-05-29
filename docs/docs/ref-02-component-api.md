@@ -9,7 +9,7 @@ next: component-specs.html
 
 ## ReactComponent
 
-Component classses created by `createClass()` return instances of `ReactComponent` when called. Most of the time when you're using React you're either creating or consuming these component objects.
+Component classes created by `React.createClass()` return instances of `ReactComponent` when called. Most of the time when you're using React you're either creating or consuming these component objects.
 
 
 ### getDOMNode
@@ -18,26 +18,26 @@ Component classses created by `createClass()` return instances of `ReactComponen
 DOMElement getDOMNode()
 ```
 
-If this component has been mounted into the DOM, this returns the corresponding native browser DOM element. This method is useful for reading values out of the DOM, such as form field values and performing DOM measurements.
+If this component has been mounted into the DOM, this returns the corresponding native browser DOM element. This method is useful for reading values out of the DOM, such as form field values and performing DOM measurements. When `render` returns `null` or `false`, `this.getDOMNode()` returns `null`.
 
 
 ### setProps
 
 ```javascript
-setProps(object nextProps)
+setProps(object nextProps[, function callback])
 ```
 
-When you're integrating with an external JavaScript application you may want to signal a change to a React component rendered with `renderComponent()`. Simply call `setProps()` to change its properties and trigger a re-render.
+When you're integrating with an external JavaScript application you may want to signal a change to a React component rendered with `React.renderComponent()`. Simply call `setProps()` to change its properties and trigger a re-render. In addition, you can supply an optional callback function that is executed once `setProps` is completed.
 
 > Note:
 >
-> This method can only be called on a root-level component. That is, it's only available on the component passed directly to `renderComponent()` and none of its children. If you're inclined to use `setProps()` on a child component, instead take advantage of reactive updates and pass the new prop to the child component when it's created in `render()`.
+> This method can only be called on a root-level component. That is, it's only available on the component passed directly to `React.renderComponent()` and none of its children. If you're inclined to use `setProps()` on a child component, instead take advantage of reactive updates and pass the new prop to the child component when it's created in `render()`.
 
 
 ### replaceProps
 
 ```javascript
-replaceProps(object nextProps)
+replaceProps(object nextProps[, function callback])
 ```
 
 Like `setProps()` but deletes any pre-existing props instead of merging the two objects.

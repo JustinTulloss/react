@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ describe('ReactPropTransferer', function() {
         return this.transferPropsTo(
           <input
             className="textinput"
-            style={{display: 'block'}}
+            style={{display: 'block', color: 'green'}}
             type="text"
             value=""
           />
@@ -48,14 +48,14 @@ describe('ReactPropTransferer', function() {
 
   it('should leave explicitly specified properties intact', function() {
     var instance = <TestComponent type="radio" />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
 
     reactComponentExpect(instance)
       .expectRenderedChild()
         .toBeComponentOfType(React.DOM.input)
         .scalarPropsEqual({
           className: 'textinput',
-          style: {display: 'block'},
+          style: {display: 'block', color: 'green'},
           type: 'text',
           value: ''
         });
@@ -63,7 +63,7 @@ describe('ReactPropTransferer', function() {
 
   it('should transfer unspecified properties', function() {
     var instance = <TestComponent placeholder="Type here..." />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
 
     reactComponentExpect(instance)
       .expectRenderedChild()
@@ -75,9 +75,9 @@ describe('ReactPropTransferer', function() {
     var instance =
       <TestComponent
         className="hidden_elem"
-        style={{width: '100%'}}
+        style={{width: '100%', display: 'none'}}
       />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
 
     reactComponentExpect(instance)
       .expectRenderedChild()
@@ -85,6 +85,7 @@ describe('ReactPropTransferer', function() {
         .scalarPropsEqual({
           className: 'textinput hidden_elem',
           style: {
+            color: 'green',
             display: 'block',
             width: '100%'
           }
@@ -103,7 +104,7 @@ describe('ReactPropTransferer', function() {
         <span>Hello!</span>
       </ChildrenTestComponent>;
 
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     reactComponentExpect(instance)
       .expectRenderedChild()
         .toBeDOMComponentWithTag('div')

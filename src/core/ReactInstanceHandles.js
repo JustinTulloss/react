@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ var MAX_TREE_DEPTH = 100;
  * @internal
  */
 function getReactRootIDString(index) {
-  return SEPARATOR + 'r[' + index.toString(36) + ']';
+  return SEPARATOR + index.toString(36);
 }
 
 /**
@@ -241,7 +241,7 @@ var ReactInstanceHandles = {
    * @internal
    */
   createReactID: function(rootID, name) {
-    return rootID + SEPARATOR + name;
+    return rootID + name;
   },
 
   /**
@@ -253,8 +253,11 @@ var ReactInstanceHandles = {
    * @internal
    */
   getReactRootIDFromNodeID: function(id) {
-    var regexResult = /\.r\[[^\]]+\]/.exec(id);
-    return regexResult && regexResult[0];
+    if (id && id.charAt(0) === SEPARATOR && id.length > 1) {
+      var index = id.indexOf(SEPARATOR, 1);
+      return index > -1 ? id.substr(0, index) : id;
+    }
+    return null;
   },
 
   /**
@@ -300,8 +303,8 @@ var ReactInstanceHandles = {
 
   /**
    * Traverse a node ID, calling the supplied `cb` for each ancestor ID. For
-   * example, passing `.r[0].{row-0}.[1]` would result in `cb` getting called
-   * with `.r[0]`, `.r[0].{row-0}`, and `.r[0].{row-0}.[1]`.
+   * example, passing `.0.$row-0.1` would result in `cb` getting called
+   * with `.0`, `.0.$row-0`, and `.0.$row-0.1`.
    *
    * NOTE: This traversal happens on IDs without touching the DOM.
    *

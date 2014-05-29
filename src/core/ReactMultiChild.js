@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ var ReactComponent = require('ReactComponent');
 var ReactMultiChildUpdateTypes = require('ReactMultiChildUpdateTypes');
 
 var flattenChildren = require('flattenChildren');
+var instantiateReactComponent = require('instantiateReactComponent');
 var shouldUpdateReactComponent = require('shouldUpdateReactComponent');
 
 /**
@@ -141,7 +142,7 @@ function enqueueTextContent(parentID, textContent) {
  */
 function processQueue() {
   if (updateQueue.length) {
-    ReactComponent.DOMIDOperations.dangerouslyProcessChildrenUpdates(
+    ReactComponent.BackendIDOperations.dangerouslyProcessChildrenUpdates(
       updateQueue,
       markupQueue
     );
@@ -192,14 +193,18 @@ var ReactMultiChild = {
       for (var name in children) {
         var child = children[name];
         if (children.hasOwnProperty(name)) {
+          // The rendered children must be turned into instances as they're
+          // mounted.
+          var childInstance = instantiateReactComponent(child);
+          children[name] = childInstance;
           // Inlined for performance, see `ReactInstanceHandles.createReactID`.
-          var rootID = this._rootNodeID + '.' + name;
-          var mountImage = child.mountComponent(
+          var rootID = this._rootNodeID + name;
+          var mountImage = childInstance.mountComponent(
             rootID,
             transaction,
             this._mountDepth + 1
           );
-          child._mountIndex = index;
+          childInstance._mountIndex = index;
           mountImages.push(mountImage);
           index++;
         }
@@ -215,6 +220,7 @@ var ReactMultiChild = {
      */
     updateTextContent: function(nextContent) {
       updateDepth++;
+      var errorThrown = true;
       try {
         var prevChildren = this._renderedChildren;
         // Remove any rendered children.
@@ -225,13 +231,13 @@ var ReactMultiChild = {
         }
         // Set new text content.
         this.setTextContent(nextContent);
-      } catch (error) {
+        errorThrown = false;
+      } finally {
         updateDepth--;
-        updateDepth || clearQueue();
-        throw error;
+        if (!updateDepth) {
+          errorThrown ? clearQueue() : processQueue();
+        }
       }
-      updateDepth--;
-      updateDepth || processQueue();
     },
 
     /**
@@ -243,15 +249,16 @@ var ReactMultiChild = {
      */
     updateChildren: function(nextNestedChildren, transaction) {
       updateDepth++;
+      var errorThrown = true;
       try {
         this._updateChildren(nextNestedChildren, transaction);
-      } catch (error) {
+        errorThrown = false;
+      } finally {
         updateDepth--;
-        updateDepth || clearQueue();
-        throw error;
+        if (!updateDepth) {
+          errorThrown ? clearQueue() : processQueue();
+        }
       }
-      updateDepth--;
-      updateDepth || processQueue();
     },
 
     /**
@@ -279,11 +286,12 @@ var ReactMultiChild = {
           continue;
         }
         var prevChild = prevChildren && prevChildren[name];
-        var nextChild = nextChildren[name];
-        if (shouldUpdateReactComponent(prevChild, nextChild)) {
+        var prevDescriptor = prevChild && prevChild._descriptor;
+        var nextDescriptor = nextChildren[name];
+        if (shouldUpdateReactComponent(prevDescriptor, nextDescriptor)) {
           this.moveChild(prevChild, nextIndex, lastIndex);
           lastIndex = Math.max(prevChild._mountIndex, lastIndex);
-          prevChild.receiveComponent(nextChild, transaction);
+          prevChild.receiveComponent(nextDescriptor, transaction);
           prevChild._mountIndex = nextIndex;
         } else {
           if (prevChild) {
@@ -291,8 +299,10 @@ var ReactMultiChild = {
             lastIndex = Math.max(prevChild._mountIndex, lastIndex);
             this._unmountChildByName(prevChild, name);
           }
+          // The child must be instantiated before it's mounted.
+          var nextChildInstance = instantiateReactComponent(nextDescriptor);
           this._mountChildByNameAtIndex(
-            nextChild, name, nextIndex, transaction
+            nextChildInstance, name, nextIndex, transaction
           );
         }
         nextIndex++;
@@ -385,7 +395,7 @@ var ReactMultiChild = {
      */
     _mountChildByNameAtIndex: function(child, name, index, transaction) {
       // Inlined for performance, see `ReactInstanceHandles.createReactID`.
-      var rootID = this._rootNodeID + '.' + name;
+      var rootID = this._rootNodeID + name;
       var mountImage = child.mountComponent(
         rootID,
         transaction,
@@ -407,13 +417,10 @@ var ReactMultiChild = {
      * @private
      */
     _unmountChildByName: function(child, name) {
-      // TODO: When is this not true?
-      if (ReactComponent.isValidComponent(child)) {
-        this.removeChild(child);
-        child._mountIndex = null;
-        child.unmountComponent();
-        delete this._renderedChildren[name];
-      }
+      this.removeChild(child);
+      child._mountIndex = null;
+      child.unmountComponent();
+      delete this._renderedChildren[name];
     }
 
   }

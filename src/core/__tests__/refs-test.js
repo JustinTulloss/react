@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ var ClickCounter = React.createClass({
  */
 var GeneralContainerComponent = React.createClass({
   render: function() {
-    return <div> {this.props.children} </div>;
+    return <div>{this.props.children}</div>;
   }
 });
 
@@ -235,6 +235,18 @@ describe('ref swapping', function() {
     expect(refHopsAround.refs.hopRef).toEqual(firstDiv);
     expect(refHopsAround.refs.divTwoRef).toEqual(secondDiv);
     expect(refHopsAround.refs.divThreeRef).toEqual(thirdDiv);
+  });
+
+
+  it('always has a value for this.refs', function() {
+    var Component = React.createClass({
+      render: function() {
+        return <div />;
+      }
+    });
+
+    var instance = ReactTestUtils.renderIntoDocument(<Component />);
+    expect(!!instance.refs).toBe(true);
   });
 });
 

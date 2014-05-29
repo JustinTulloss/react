@@ -1,5 +1,6 @@
 'use strict';
 
+var fs = require('fs');
 var grunt = require('grunt');
 
 var src = 'npm-react/';
@@ -14,9 +15,13 @@ function buildRelease() {
   // mkdir -p build/react-core/lib
   grunt.file.mkdir(lib);
 
-  // Copy everything over
-  // console.log(grunt.file.expandMapping(src + '**/*', dest, {flatten: true}));
-  grunt.file.expandMapping(src + '**/*', dest, {flatten: true}).forEach(function(mapping) {
+  // Copy npm-react/**/* to build/npm-react
+  // and build/modules/**/* to build/react-core/lib
+  var mappings = [].concat(
+    grunt.file.expandMapping('**/*', dest, {cwd: src}),
+    grunt.file.expandMapping('**/*', lib, {cwd: modSrc})
+  );
+  mappings.forEach(function(mapping) {
     var src = mapping.src[0];
     var dest = mapping.dest;
     if (grunt.file.isDir(src)) {
@@ -26,22 +31,30 @@ function buildRelease() {
     }
   });
 
-  // copy build/modules/*.js to build/react-core/lib
-  grunt.file.expandMapping(modSrc + '*.js', lib, { flatten: true }).forEach(function(mapping) {
-    grunt.file.copy(mapping.src[0], mapping.dest);
-  });
-
   // modify build/react-core/package.json to set version ##
   var pkg = grunt.file.readJSON(dest + 'package.json');
   pkg.version = grunt.config.data.pkg.version;
   grunt.file.write(dest + 'package.json', JSON.stringify(pkg, null, 2));
 }
 
-function buildDev() {
-  // TODO: same as above except different destination
+function packRelease() {
+  /*jshint validthis:true */
+  var done = this.async();
+  var spawnCmd = {
+    cmd: 'npm',
+    args: ['pack', 'npm-react'],
+    opts: {
+      cwd: 'build/'
+    }
+  };
+  grunt.util.spawn(spawnCmd, function() {
+    var src = 'build/react-' + grunt.config.data.pkg.version + '.tgz';
+    var dest = 'build/react.tgz';
+    fs.rename(src, dest, done);
+  });
 }
 
 module.exports = {
   buildRelease: buildRelease,
-  buildDev: buildDev
+  packRelease: packRelease
 };

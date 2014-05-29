@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ describe('ReactCompositeComponent-spec', function() {
       }
     });
 
-    expect(TestComponent.componentConstructor.displayName)
+    expect(TestComponent.type.displayName)
       .toBe('TestComponent');
   });
 
@@ -64,8 +64,8 @@ describe('ReactCompositeComponent-spec', function() {
       }
     });
 
-    expect(TestComponent.componentConstructor.propTypes).toBeDefined();
-    expect(TestComponent.componentConstructor.propTypes.value)
+    expect(TestComponent.type.propTypes).toBeDefined();
+    expect(TestComponent.type.propTypes.value)
       .toBe(propValidator);
   });
 });

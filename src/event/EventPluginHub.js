@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ var accumulate = require('accumulate');
 var forEachAccumulated = require('forEachAccumulated');
 var invariant = require('invariant');
 var isEventSupported = require('isEventSupported');
+var monitorCodeUse = require('monitorCodeUse');
 
 /**
  * Internal store for event listeners
@@ -140,6 +141,8 @@ var EventPluginHub = {
 
   },
 
+  eventNameDispatchConfigs: EventPluginRegistry.eventNameDispatchConfigs,
+
   registrationNameModules: EventPluginRegistry.registrationNameModules,
 
   /**
@@ -150,17 +153,30 @@ var EventPluginHub = {
    * @param {?function} listener The callback to store.
    */
   putListener: function(id, registrationName, listener) {
+    invariant(
+      !listener || typeof listener === 'function',
+      'Expected %s listener to be a function, instead got type %s',
+      registrationName, typeof listener
+    );
+
     if (__DEV__) {
       // IE8 has no API for event capturing and the `onScroll` event doesn't
       // bubble.
       if (registrationName === 'onScroll' &&
           !isEventSupported('scroll', true)) {
+        monitorCodeUse('react_no_scroll_event');
         console.warn('This browser doesn\'t support the `onScroll` event');
       }
     }
     var bankForRegistrationName =
       listenerBank[registrationName] || (listenerBank[registrationName] = {});
     bankForRegistrationName[id] = listener;
+
+    var PluginModule =
+      EventPluginRegistry.registrationNameModules[registrationName];
+    if (PluginModule && PluginModule.didPutListener) {
+      PluginModule.didPutListener(id, registrationName, listener);
+    }
   },
 
   /**
@@ -180,7 +196,14 @@ var EventPluginHub = {
    * @param {string} registrationName Name of listener (e.g. `onClick`).
    */
   deleteListener: function(id, registrationName) {
+    var PluginModule =
+      EventPluginRegistry.registrationNameModules[registrationName];
+    if (PluginModule && PluginModule.willDeleteListener) {
+      PluginModule.willDeleteListener(id, registrationName);
+    }
+
     var bankForRegistrationName = listenerBank[registrationName];
+    // TODO: This should never be null -- when is it?
     if (bankForRegistrationName) {
       delete bankForRegistrationName[id];
     }
@@ -193,6 +216,16 @@ var EventPluginHub = {
    */
   deleteAllListeners: function(id) {
     for (var registrationName in listenerBank) {
+      if (!listenerBank[registrationName][id]) {
+        continue;
+      }
+
+      var PluginModule =
+        EventPluginRegistry.registrationNameModules[registrationName];
+      if (PluginModule && PluginModule.willDeleteListener) {
+        PluginModule.willDeleteListener(id, registrationName);
+      }
+
       delete listenerBank[registrationName][id];
     }
   },
@@ -265,10 +298,14 @@ var EventPluginHub = {
   },
 
   /**
-   * This is needed for tests only. Do not use!
+   * These are needed for tests only. Do not use!
    */
   __purge: function() {
     listenerBank = {};
+  },
+
+  __getListenerBank: function() {
+    return listenerBank;
   }
 
 };

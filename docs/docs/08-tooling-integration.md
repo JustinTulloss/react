@@ -38,24 +38,4 @@ If you have [npm](http://npmjs.org/), you can simply run `npm install -g react-t
 
 ### Helpful Open-Source Projects
 
-The open-source community has built tools that integrate JSX with several build systems.
-
-* [reactify](https://github.com/andreypopp/reactify) - use JSX with [browserify](http://browserify.org/)
-* [grunt-react](https://github.com/ericclemmons/grunt-react) - [grunt](http://gruntjs.com/) task for JSX
-* [gulp-react](https://github.com/sindresorhus/gulp-react) - [gulp](http://gulpjs.com/) task for JSX
-* [jsx-requirejs-plugin](https://github.com/philix/jsx-requirejs-plugin) - use JSX with [require.js](http://requirejs.org/) and precompile JSX files with r.js
-* [pyReact](https://github.com/facebook/react-python) - use JSX with [Python](http://www.python.org/)
-* [react-rails](https://github.com/facebook/react-rails) - use JSX with [Ruby on Rails](http://rubyonrails.org/)
-
-
-### Syntax Highlighting & Linting
-
-* Many editors already include reasonable support for JSX (Vim, Emacs js2-mode).
-  * [JSX syntax highlighting](https://github.com/yungsters/sublime/blob/master/tmLanguage/JavaScript%20(JSX\).tmLanguage) is available for Sublime Text and other editors
-    that support `*.tmLanguage`.
-* Linting provides accurate line numbers after compiling without sourcemaps.
-* Elements use standard scoping so linters can find usage of out-of-scope components.
-
-## React Page
-
-To get started on a new project, you can use [react-page](https://github.com/facebook/react-page/), a complete React project creator. It supports both server-side and client-side rendering, source transform and packaging JSX files using CommonJS modules, and instant reload.
+The open-source community has built tools that integrate JSX with several editors and build systems. See [JSX integrations](https://github.com/facebook/react/wiki/Complementary-Tools#jsx-integrations) for the full list.

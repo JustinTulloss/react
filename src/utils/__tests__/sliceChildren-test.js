@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ describe('sliceChildren', function() {
 
   function renderAndSlice(set, start, end) {
     var instance = <Partial start={start} end={end}>{set}</Partial>;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     var rendered = reactComponentExpect(instance)
       .expectRenderedChild()
       .instance();
@@ -68,9 +68,9 @@ describe('sliceChildren', function() {
     ];
     var children = renderAndSlice(fullSet, 0);
     expect(children).toEqual({
-      '{A}': fullSet[0],
-      '{B}': fullSet[1],
-      '{C}': fullSet[2]
+      '.$A': fullSet[0],
+      '.$B': fullSet[1],
+      '.$C': fullSet[2]
     });
   });
 
@@ -82,8 +82,8 @@ describe('sliceChildren', function() {
     ];
     var children = renderAndSlice(fullSet, 1);
     expect(children).toEqual({
-      '{B}': fullSet[1],
-      '{C}': fullSet[2]
+      '.$B': fullSet[1],
+      '.$C': fullSet[2]
     });
   });
 
@@ -96,7 +96,7 @@ describe('sliceChildren', function() {
     ];
     var children = renderAndSlice(fullSet, 1, 2);
     expect(children).toEqual({
-      '{B}': fullSet[1]
+      '.$B': fullSet[1]
     });
   });
 
@@ -106,13 +106,13 @@ describe('sliceChildren', function() {
     var c = <div />;
 
     var instance = <Partial start={1} end={2}>{a}{b}{c}</Partial>;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     var rendered = reactComponentExpect(instance)
       .expectRenderedChild()
       .instance();
 
     expect(rendered.props.children).toEqual({
-      '[1]': b
+      '.1': b
     });
   });
 

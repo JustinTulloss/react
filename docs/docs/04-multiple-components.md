@@ -73,7 +73,7 @@ When you create a React component instance, you can include additional React com
 <Parent><Child /></Parent>
 ```
 
-`Parent` can read its children by accessing the special `this.props.children` prop.
+`Parent` can read its children by accessing the special `this.props.children` prop. **`this.props.children` is an opaque data structure:** use the [React.Children utilities](/react/docs/top-level-api.html#react.children) to manipulate them.
 
 
 ### Child Reconciliation
@@ -134,6 +134,26 @@ The situation gets more complicated when the children are shuffled around (as in
 
 When React reconciles the keyed children, it will ensure that any child with `key` will be reordered (instead of clobbered) or destroyed (instead of reused).
 
+You can also key children by passing an object. The object keys will be used as `key` for each value. However it is important to remember that JavaScript does not guarantee the ordering of properties will be preserved. In practice browsers will preserve property order **except** for properties that can be parsed as a 32-bit unsigned integers. Numeric properties will be ordered sequentially and before other properties. If this happens React will render components out of order. This can be avoided by adding a string prefix to the key:
+
+```javascript
+  render: function() {
+    var items = {};
+    
+    this.props.results.forEach(function(result) {
+      // If result.id can look like a number (consider short hashes), then
+      // object iteration order is not guaranteed. In this case, we add a prefix
+      // to ensure the keys are strings.
+      items['result-' + result.id] = <li>{result.text}</li>;
+    });
+    
+    return (
+      <ol>
+        {items}
+      </ol>
+    );
+  }
+```
 
 ## Data Flow
 

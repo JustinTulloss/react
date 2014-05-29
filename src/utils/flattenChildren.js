@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 
 "use strict";
 
-var invariant = require('invariant');
 var traverseAllChildren = require('traverseAllChildren');
+var warning = require('warning');
 
 /**
  * @param {function} traverseContext Context passed through traversal.
@@ -29,13 +29,15 @@ var traverseAllChildren = require('traverseAllChildren');
 function flattenSingleChildIntoContext(traverseContext, child, name) {
   // We found a component instance.
   var result = traverseContext;
-  invariant(
-    !result.hasOwnProperty(name),
-    'flattenChildren(...): Encountered two children with the same key, `%s`. ' +
-    'Children keys must be unique.',
+  var keyUnique = !result.hasOwnProperty(name);
+  warning(
+    keyUnique,
+    'flattenChildren(...): Encountered two children with the same key, ' +
+    '`%s`. Child keys must be unique; when two children share a key, only ' +
+    'the first child will be used.',
     name
   );
-  if (child != null) {
+  if (keyUnique && child != null) {
     result[name] = child;
   }
 }

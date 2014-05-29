@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,9 +56,6 @@ var ReactContext = {
     ReactContext.current = merge(previousContext, newContext);
     try {
       result = scopedCallback();
-    } catch (error) {
-      // IE8 requires `catch` in order to use `finally`.
-      throw error;
     } finally {
       ReactContext.current = previousContext;
     }

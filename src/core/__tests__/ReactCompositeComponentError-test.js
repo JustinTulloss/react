@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ describe('ReactCompositeComponent-error', function() {
     });
 
     var instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expect(ReactErrorUtils.guard.mostRecentCall.args[1])
       .toEqual('Component.someHandler');
   });

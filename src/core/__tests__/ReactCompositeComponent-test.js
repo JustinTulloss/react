@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,19 +19,23 @@
 
 "use strict";
 
-var MorphingComponent;
 var ChildUpdates;
+var MorphingComponent;
 var React;
 var ReactComponent;
 var ReactCurrentOwner;
-var ReactPropTypes;
-var ReactTestUtils;
-var ReactMount;
 var ReactDoNotBindDeprecated;
+var ReactMount;
+var ReactPropTypes;
+var ReactServerRendering;
+var ReactTestUtils;
+var TogglingComponent;
 
 var cx;
 var reactComponentExpect;
 var mocks;
+var warn;
+
 
 describe('ReactCompositeComponent', function() {
 
@@ -47,6 +51,7 @@ describe('ReactCompositeComponent', function() {
     ReactPropTypes = require('ReactPropTypes');
     ReactTestUtils = require('ReactTestUtils');
     ReactMount = require('ReactMount');
+    ReactServerRendering = require('ReactServerRendering');
 
     MorphingComponent = React.createClass({
       getInitialState: function() {
@@ -80,11 +85,34 @@ describe('ReactCompositeComponent', function() {
           <b></b>;
       }
     });
+
+    TogglingComponent = React.createClass({
+      getInitialState: function() {
+        return {component: this.props.firstComponent};
+      },
+      componentDidMount: function() {
+        console.log(this.getDOMNode());
+        this.setState({component: this.props.secondComponent});
+      },
+      componentDidUpdate: function() {
+        console.log(this.getDOMNode());
+      },
+      render: function() {
+        return this.state.component ? this.state.component() : null;
+      }
+    });
+
+    warn = console.warn;
+    console.warn = mocks.getMockFunction();
+  });
+
+  afterEach(function() {
+    console.warn = warn;
   });
 
   it('should support rendering to different child types over time', function() {
     var instance = <MorphingComponent />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
 
     reactComponentExpect(instance)
       .expectRenderedChild()
@@ -101,9 +129,163 @@ describe('ReactCompositeComponent', function() {
       .toBeDOMComponentWithTag('a');
   });
 
+  it('should render null and false as a script tag under the hood', () => {
+    var Component1 = React.createClass({
+      render: function() {
+        return null;
+      }
+    });
+    var Component2 = React.createClass({
+      render: function() {
+        return false;
+      }
+    });
+
+    var instance1 = ReactTestUtils.renderIntoDocument(<Component1 />);
+    var instance2 = ReactTestUtils.renderIntoDocument(<Component2 />);
+    reactComponentExpect(instance1)
+      .expectRenderedChild()
+      .toBeDOMComponentWithTag('script');
+    reactComponentExpect(instance2)
+      .expectRenderedChild()
+      .toBeDOMComponentWithTag('script');
+  });
+
+  it('should still throw when rendering to undefined', () => {
+    var Component = React.createClass({
+      render: function() {}
+    });
+    expect(function() {
+      ReactTestUtils.renderIntoDocument(<Component />);
+    }).toThrow(
+      'Invariant Violation: Component.render(): A valid ReactComponent must ' +
+      'be returned. You may have returned undefined, an array or some other ' +
+      'invalid object.'
+    );
+  });
+
+  it('should be able to switch between rendering null and a normal tag', () => {
+    spyOn(console, 'log');
+
+    var instance1 =
+      <TogglingComponent
+        firstComponent={null}
+        secondComponent={React.DOM.div}
+      />;
+    var instance2 =
+      <TogglingComponent
+        firstComponent={React.DOM.div}
+        secondComponent={null}
+      />;
+
+    expect(function() {
+      ReactTestUtils.renderIntoDocument(instance1);
+      ReactTestUtils.renderIntoDocument(instance2);
+    }).not.toThrow();
+
+    expect(console.log.argsForCall.length).toBe(4);
+    expect(console.log.argsForCall[0][0]).toBe(null);
+    expect(console.log.argsForCall[1][0].tagName).toBe('DIV');
+    expect(console.log.argsForCall[2][0].tagName).toBe('DIV');
+    expect(console.log.argsForCall[3][0]).toBe(null);
+  });
+
+  it('should distinguish between a script placeholder and an actual script tag',
+    () => {
+      spyOn(console, 'log');
+
+      var instance1 =
+        <TogglingComponent
+          firstComponent={null}
+          secondComponent={React.DOM.script}
+        />;
+      var instance2 =
+        <TogglingComponent
+          firstComponent={React.DOM.script}
+          secondComponent={null}
+        />;
+
+      expect(function() {
+        ReactTestUtils.renderIntoDocument(instance1);
+      }).not.toThrow();
+      expect(function() {
+        ReactTestUtils.renderIntoDocument(instance2);
+      }).not.toThrow();
+
+      expect(console.log.argsForCall.length).toBe(4);
+      expect(console.log.argsForCall[0][0]).toBe(null);
+      expect(console.log.argsForCall[1][0].tagName).toBe('SCRIPT');
+      expect(console.log.argsForCall[2][0].tagName).toBe('SCRIPT');
+      expect(console.log.argsForCall[3][0]).toBe(null);
+    }
+  );
+
+  it('should have getDOMNode return null when multiple layers of composite ' +
+    'components render to the same null placeholder', () => {
+      spyOn(console, 'log');
+
+      var GrandChild = React.createClass({
+        render: function() {
+          return null;
+        }
+      });
+
+      var Child = React.createClass({
+        render: function() {
+          return <GrandChild />;
+        }
+      });
+
+      var instance1 =
+        <TogglingComponent
+          firstComponent={React.DOM.div}
+          secondComponent={Child}
+        />;
+      var instance2 =
+        <TogglingComponent
+          firstComponent={Child}
+          secondComponent={React.DOM.div}
+        />;
+
+      expect(function() {
+        ReactTestUtils.renderIntoDocument(instance1);
+      }).not.toThrow();
+      expect(function() {
+        ReactTestUtils.renderIntoDocument(instance2);
+      }).not.toThrow();
+
+      expect(console.log.argsForCall.length).toBe(4);
+      expect(console.log.argsForCall[0][0].tagName).toBe('DIV');
+      expect(console.log.argsForCall[1][0]).toBe(null);
+      expect(console.log.argsForCall[2][0]).toBe(null);
+      expect(console.log.argsForCall[3][0].tagName).toBe('DIV');
+    }
+  );
+
+  it('should not thrash a server rendered layout with client side one', () => {
+    var Child = React.createClass({
+      render: function() {
+        return null;
+      }
+    });
+    var Parent = React.createClass({
+      render: function() {
+        return <div><Child /></div>;
+      }
+    });
+
+    var markup = ReactServerRendering.renderComponentToString(<Parent />);
+    var container = document.createElement('div');
+    container.innerHTML = markup;
+
+    spyOn(console, 'warn');
+    React.renderComponent(<Parent />, container);
+    expect(console.warn).not.toHaveBeenCalled();
+  });
+
   it('should react to state changes from callbacks', function() {
     var instance = <MorphingComponent />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
 
     var renderedChild = reactComponentExpect(instance)
       .expectRenderedChild()
@@ -117,7 +299,7 @@ describe('ReactCompositeComponent', function() {
 
   it('should rewire refs when rendering to different child types', function() {
     var instance = <MorphingComponent />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
 
     reactComponentExpect(instance.refs.x).toBeDOMComponentWithTag('a');
     instance._toggleActivatedState();
@@ -128,7 +310,7 @@ describe('ReactCompositeComponent', function() {
 
   it('should not cache old DOM nodes when switching constructors', function() {
     var instance = <ChildUpdates renderAnchor={true} anchorClassOn={false}/>;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     instance.setProps({anchorClassOn: true});  // Warm any cache
     instance.setProps({renderAnchor: false});  // Clear out the anchor
     // rerender
@@ -155,40 +337,42 @@ describe('ReactCompositeComponent', function() {
         return this;
       }),
       render: function() {
-        return <div> </div>;
+        return <div></div>;
       }
     });
     var instance = <ComponentClass />;
 
-    // These are controversial assertions for now, they just exist
-    // because existing code depends on these assumptions.
-    expect(function() {
-      instance.methodToBeExplicitlyBound.bind(instance)();
-    }).not.toThrow();
-    expect(function() {
-      instance.methodAutoBound();
-    }).not.toThrow();
-    expect(function() {
-      instance.methodExplicitlyNotBound();
-    }).not.toThrow();
-
     // Next, prove that once mounted, the scope is bound correctly to the actual
     // component.
-    ReactTestUtils.renderIntoDocument(instance);
-    expect(console.warn.argsForCall.length).toBe(0);
-    var explicitlyBound = instance.methodToBeExplicitlyBound.bind(instance);
+    var mountedInstance = ReactTestUtils.renderIntoDocument(instance);
+
+    expect(function() {
+      mountedInstance.methodToBeExplicitlyBound.bind(instance)();
+    }).not.toThrow();
+    expect(function() {
+      mountedInstance.methodAutoBound();
+    }).not.toThrow();
+    expect(function() {
+      mountedInstance.methodExplicitlyNotBound();
+    }).not.toThrow();
+
     expect(console.warn.argsForCall.length).toBe(1);
-    var autoBound = instance.methodAutoBound;
-    var explicitlyNotBound = instance.methodExplicitlyNotBound;
+    var explicitlyBound = mountedInstance.methodToBeExplicitlyBound.bind(
+      mountedInstance
+    );
+    expect(console.warn.argsForCall.length).toBe(2);
+    var autoBound = mountedInstance.methodAutoBound;
+    var explicitlyNotBound = mountedInstance.methodExplicitlyNotBound;
 
     var context = {};
-    expect(explicitlyBound.call(context)).toBe(instance);
-    expect(autoBound.call(context)).toBe(instance);
+    expect(explicitlyBound.call(context)).toBe(mountedInstance);
+    expect(autoBound.call(context)).toBe(mountedInstance);
     expect(explicitlyNotBound.call(context)).toBe(context);
 
-    expect(explicitlyBound.call(instance)).toBe(instance);
-    expect(autoBound.call(instance)).toBe(instance);
-    expect(explicitlyNotBound.call(instance)).toBe(instance);
+    expect(explicitlyBound.call(mountedInstance)).toBe(mountedInstance);
+    expect(autoBound.call(mountedInstance)).toBe(mountedInstance);
+    // This one is the weird one
+    expect(explicitlyNotBound.call(mountedInstance)).toBe(mountedInstance);
 
   });
 
@@ -203,15 +387,15 @@ describe('ReactCompositeComponent', function() {
     });
 
     var instance1 = <Component />;
-    ReactTestUtils.renderIntoDocument(instance1);
+    instance1 = ReactTestUtils.renderIntoDocument(instance1);
     reactComponentExpect(instance1).scalarPropsEqual({key: 'testKey'});
 
     var instance2 = <Component key={undefined} />;
-    ReactTestUtils.renderIntoDocument(instance2);
+    instance2 = ReactTestUtils.renderIntoDocument(instance2);
     reactComponentExpect(instance2).scalarPropsEqual({key: 'testKey'});
 
     var instance3 = <Component key={null} />;
-    ReactTestUtils.renderIntoDocument(instance3);
+    instance3 = ReactTestUtils.renderIntoDocument(instance3);
     reactComponentExpect(instance3).scalarPropsEqual({key: null});
   });
 
@@ -227,7 +411,7 @@ describe('ReactCompositeComponent', function() {
 
     var inputProps = {};
     var instance1 = Component(inputProps);
-    ReactTestUtils.renderIntoDocument(instance1);
+    instance1 = ReactTestUtils.renderIntoDocument(instance1);
     expect(instance1.props.key).toBe('testKey');
 
     // We don't mutate the input, just in case the caller wants to do something
@@ -270,16 +454,15 @@ describe('ReactCompositeComponent', function() {
       }
     });
 
-    var instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    var instance = ReactTestUtils.renderIntoDocument(<Component />);
     reactComponentExpect(instance).scalarPropsEqual({key: 'testKey'});
     reactComponentExpect(instance).scalarStateEqual({key: 'testKeyState'});
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(<Component key={null} />);
-    }).toThrow(
-      'Invariant Violation: Required prop `key` was not specified in ' +
-      '`Component`.'
+    ReactTestUtils.renderIntoDocument(<Component key={null} />);
+
+    expect(console.warn.mock.calls.length).toBe(1);
+    expect(console.warn.mock.calls[0][0]).toBe(
+      'Warning: Required prop `key` was not specified in `Component`.'
     );
   });
 
@@ -294,12 +477,11 @@ describe('ReactCompositeComponent', function() {
       }
     });
 
-    var instance = <Component />;
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(instance);
-    }).toThrow(
-      'Invariant Violation: Required prop `key` was not specified in ' +
-      '`Component`.'
+    ReactTestUtils.renderIntoDocument(<Component />);
+
+    expect(console.warn.mock.calls.length).toBe(1);
+    expect(console.warn.mock.calls[0][0]).toBe(
+      'Warning: Required prop `key` was not specified in `Component`.'
     );
   });
 
@@ -313,23 +495,23 @@ describe('ReactCompositeComponent', function() {
       }
     });
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(<Component />);
-    }).toThrow(
-      'Invariant Violation: Required prop `key` was not specified in ' +
-      '`Component`.'
+    ReactTestUtils.renderIntoDocument(<Component />);
+    ReactTestUtils.renderIntoDocument(<Component key={42} />);
+
+    expect(console.warn.mock.calls.length).toBe(2);
+    expect(console.warn.mock.calls[0][0]).toBe(
+      'Warning: Required prop `key` was not specified in `Component`.'
     );
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(<Component key={42} />);
-    }).toThrow(
-      'Invariant Violation: Invalid prop `key` of type `number` supplied to ' +
+    expect(console.warn.mock.calls[1][0]).toBe(
+      'Warning: Invalid prop `key` of type `number` supplied to ' +
       '`Component`, expected `string`.'
     );
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(<Component key="string" />);
-    }).not.toThrow();
+    ReactTestUtils.renderIntoDocument(<Component key="string" />);
+
+    // Should not error for strings
+    expect(console.warn.mock.calls.length).toBe(2);
   });
 
   it('should throw on invalid prop types', function() {
@@ -394,14 +576,9 @@ describe('ReactCompositeComponent', function() {
     });
 
     var instance = <Component />;
-    expect(function() {
-      instance.forceUpdate();
-    }).toThrow(
-      'Invariant Violation: forceUpdate(...): Can only force an update on ' +
-      'mounted or mounting components.'
-    );
+    expect(instance.forceUpdate).not.toBeDefined();
 
-    React.renderComponent(instance, container);
+    instance = React.renderComponent(instance, container);
     expect(function() {
       instance.forceUpdate();
     }).not.toThrow();
@@ -426,7 +603,7 @@ describe('ReactCompositeComponent', function() {
     expect(ReactCurrentOwner.current).toBe(null);
 
     expect(function() {
-      ReactTestUtils.renderIntoDocument(instance);
+      instance = ReactTestUtils.renderIntoDocument(instance);
     }).toThrow();
 
     expect(ReactCurrentOwner.current).toBe(null);
@@ -448,7 +625,7 @@ describe('ReactCompositeComponent', function() {
       }
     });
     var instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expect(instance.state.component).toBe(true);
     expect(instance.state.mixin).toBe(true);
   });
@@ -470,7 +647,7 @@ describe('ReactCompositeComponent', function() {
     });
     var instance = <Component />;
     expect(function() {
-      ReactTestUtils.renderIntoDocument(instance);
+      instance = ReactTestUtils.renderIntoDocument(instance);
     }).toThrow(
       'Invariant Violation: mergeObjectsWithNoDuplicateKeys(): ' +
       'Tried to merge two objects with the same key: x'
@@ -489,7 +666,7 @@ describe('ReactCompositeComponent', function() {
       }
     });
     var instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expect(instance.state.occupation).toEqual('clown');
   });
 
@@ -505,7 +682,7 @@ describe('ReactCompositeComponent', function() {
       });
       var instance = <Component />;
       expect(function() {
-        ReactTestUtils.renderIntoDocument(instance);
+        instance = ReactTestUtils.renderIntoDocument(instance);
       }).toThrow(
         'Invariant Violation: Component.getInitialState(): ' +
         'must return an object or null'
@@ -550,7 +727,7 @@ describe('ReactCompositeComponent', function() {
     ).not.toThrow();
 
     instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expect(instance.state).toEqual({foo: 'bar'});
 
     // Also the other way round should work
@@ -573,7 +750,7 @@ describe('ReactCompositeComponent', function() {
     ).not.toThrow();
 
     instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expect(instance.state).toEqual({foo: 'bar'});
 
     // Multiple mixins should be fine too
@@ -591,7 +768,7 @@ describe('ReactCompositeComponent', function() {
     ).not.toThrow();
 
     instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expect(instance.state).toEqual({foo: 'bar', x: true});
   });
 
@@ -607,7 +784,7 @@ describe('ReactCompositeComponent', function() {
       }
     });
     var instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expect(instance.state.occupation).toEqual('clown');
   });
 
@@ -623,7 +800,7 @@ describe('ReactCompositeComponent', function() {
       });
       var instance = <Component />;
       expect(function() {
-        ReactTestUtils.renderIntoDocument(instance);
+        instance = ReactTestUtils.renderIntoDocument(instance);
       }).toThrow(
         'Invariant Violation: Component.getInitialState(): ' +
         'must return an object or null'
@@ -730,8 +907,6 @@ describe('ReactCompositeComponent', function() {
       );
 
       NamedComponent(); // Shut up lint
-    } catch (e) {
-      throw e;
     } finally {
       console.warn = warn;
     }
@@ -773,8 +948,6 @@ describe('ReactCompositeComponent', function() {
         'createClass(...): `childContextTypes` is now a static property and ' +
         'should be defined inside "statics".'
       );
-    } catch (e) {
-      throw e;
     } finally {
       console.warn = warn;
     }
@@ -798,8 +971,7 @@ describe('ReactCompositeComponent', function() {
       },
 
       render: function() {
-        childInstance = <Child />;
-        return childInstance;
+        return <Child />;
       }
     });
 
@@ -820,8 +992,8 @@ describe('ReactCompositeComponent', function() {
       },
 
       render: function() {
-        grandchildInstance = <Grandchild />;
-        return grandchildInstance;
+        childInstance = this;
+        return <Grandchild />;
       }
     });
 
@@ -832,12 +1004,12 @@ describe('ReactCompositeComponent', function() {
       },
 
       render: function() {
+        grandchildInstance = this;
         return <div />;
       }
     });
 
-    var instance = <Parent />;
-    ReactTestUtils.renderIntoDocument(instance);
+    ReactTestUtils.renderIntoDocument(<Parent />);
     reactComponentExpect(childInstance).scalarContextEqual({foo: 'bar', depth: 0});
     reactComponentExpect(grandchildInstance).scalarContextEqual({foo: 'bar', depth: 1});
   });
@@ -853,25 +1025,27 @@ describe('ReactCompositeComponent', function() {
       }
     });
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(<Component />);
-    }).toThrow(
-      'Invariant Violation: Required context `foo` was not specified in ' +
-      '`Component`.'
+    ReactTestUtils.renderIntoDocument(<Component />);
+
+    expect(console.warn.mock.calls.length).toBe(1);
+    expect(console.warn.mock.calls[0][0]).toBe(
+      'Warning: Required context `foo` was not specified in `Component`.'
     );
 
-    expect(function() {
-      React.withContext({foo: 'bar'}, function() {
-        ReactTestUtils.renderIntoDocument(<Component />);
-      });
-    }).not.toThrow();
+    React.withContext({foo: 'bar'}, function() {
+      ReactTestUtils.renderIntoDocument(<Component />);
+    });
 
-    expect(function() {
-      React.withContext({foo: 123}, function() {
-        ReactTestUtils.renderIntoDocument(<Component />);
-      });
-    }).toThrow(
-      'Invariant Violation: Invalid context `foo` of type `number` supplied ' +
+    // Previous call should not error
+    expect(console.warn.mock.calls.length).toBe(1);
+
+    React.withContext({foo: 123}, function() {
+      ReactTestUtils.renderIntoDocument(<Component />);
+    });
+
+    expect(console.warn.mock.calls.length).toBe(2);
+    expect(console.warn.mock.calls[1][0]).toBe(
+      'Warning: Invalid context `foo` of type `number` supplied ' +
       'to `Component`, expected `string`.'
     );
   });
@@ -892,35 +1066,31 @@ describe('ReactCompositeComponent', function() {
       }
     });
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(
-        <Component testContext={{bar: 123}} />
-      );
-    }).toThrow(
-      'Invariant Violation: Required child context `foo` was not specified ' +
-      'in `Component`.'
+    ReactTestUtils.renderIntoDocument(<Component testContext={{bar: 123}} />);
+
+    expect(console.warn.mock.calls.length).toBe(1);
+    expect(console.warn.mock.calls[0][0]).toBe(
+      'Warning: Required child context `foo` was not specified in `Component`.'
     );
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(
-        <Component testContext={{foo: 123}} />
-      );
-    }).toThrow(
-      'Invariant Violation: Invalid child context `foo` of type `number` ' +
+    ReactTestUtils.renderIntoDocument(<Component testContext={{foo: 123}} />);
+
+    expect(console.warn.mock.calls.length).toBe(2);
+    expect(console.warn.mock.calls[1][0]).toBe(
+      'Warning: Invalid child context `foo` of type `number` ' +
       'supplied to `Component`, expected `string`.'
     );
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(
-        <Component testContext={{foo: 'foo', bar: 123}} />
-      );
-    }).not.toThrow();
+    ReactTestUtils.renderIntoDocument(
+      <Component testContext={{foo: 'foo', bar: 123}} />
+    );
 
-    expect(function() {
-      ReactTestUtils.renderIntoDocument(
-        <Component testContext={{foo: 'foo'}} />
-      );
-    }).not.toThrow();
+    ReactTestUtils.renderIntoDocument(
+      <Component testContext={{foo: 'foo'}} />
+    );
+
+    // Previous calls should not log errors
+    expect(console.warn.mock.calls.length).toBe(2);
   });
 
   it('should filter out context not in contextTypes', function() {
@@ -937,7 +1107,7 @@ describe('ReactCompositeComponent', function() {
     var instance = React.withContext({foo: 'abc', bar: 123}, function() {
       return <Component />;
     });
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     reactComponentExpect(instance).scalarContextEqual({foo: 'abc'});
   });
 
@@ -994,7 +1164,7 @@ describe('ReactCompositeComponent', function() {
     });
 
     var instance = <Parent foo="abc" />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     instance.replaceProps({foo: "def"});
     expect(actualComponentWillReceiveProps).toEqual({foo: 'def'});
     expect(actualShouldComponentUpdate).toEqual({foo: 'def'});
@@ -1005,7 +1175,10 @@ describe('ReactCompositeComponent', function() {
   it('should support statics', function() {
     var Component = React.createClass({
       statics: {
-        abc: 'def'
+        abc: 'def',
+        def: 0,
+        ghi: null,
+        jkl: 'mno'
       },
 
       render: function() {
@@ -1013,9 +1186,15 @@ describe('ReactCompositeComponent', function() {
       }
     });
     var instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expect(instance.constructor.abc).toBe('def');
     expect(Component.abc).toBe('def');
+    expect(instance.constructor.def).toBe(0);
+    expect(Component.def).toBe(0);
+    expect(instance.constructor.ghi).toBe(null);
+    expect(Component.ghi).toBe(null);
+    expect(instance.constructor.jkl).toBe('mno');
+    expect(Component.jkl).toBe('mno');
   });
 
   it('should support statics in mixins', function() {
@@ -1036,7 +1215,7 @@ describe('ReactCompositeComponent', function() {
       }
     });
     var instance = <Component />;
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expect(instance.constructor.foo).toBe('bar');
     expect(Component.foo).toBe('bar');
     expect(instance.constructor.abc).toBe('def');
@@ -1104,4 +1283,90 @@ describe('ReactCompositeComponent', function() {
       'use a component class as a mixin. Instead, just use a regular object.'
     );
   });
+
+  it('should have bound the mixin methods to the component', function() {
+    var mixin = {
+      mixinFunc: function() {return this;}
+    };
+
+    var Component = React.createClass({
+      mixins: [mixin],
+      componentDidMount: function() {
+        expect(this.mixinFunc()).toBe(this);
+      },
+      render: function() {
+        return <span />;
+      }
+    });
+    var instance = <Component />;
+    instance = ReactTestUtils.renderIntoDocument(instance);
+  });
+
+  it('should include the mixin keys in even if their values are falsy',
+    function() {
+      var mixin = {
+        keyWithNullValue: null,
+        randomCounter: 0
+      };
+
+      var Component = React.createClass({
+        mixins: [mixin],
+        componentDidMount: function() {
+          expect(this.randomCounter).toBe(0);
+          expect(this.keyWithNullValue).toBeNull();
+        },
+        render: function() {
+          return <span />;
+        }
+      });
+      var instance = <Component />;
+      instance = ReactTestUtils.renderIntoDocument(instance);
+  });
+
+  it('should allow static methods called using type property', function() {
+    spyOn(console, 'warn');
+
+    var ComponentClass = React.createClass({
+      statics: {
+        someStaticMethod: function() {
+          return 'someReturnValue';
+        }
+      },
+      getInitialState: function() {
+        return {valueToReturn: 'hi'};
+      },
+      render: function() {
+        return <div></div>;
+      }
+    });
+
+    var descriptor = <ComponentClass />;
+    expect(descriptor.type.someStaticMethod()).toBe('someReturnValue');
+    expect(console.warn.argsForCall.length).toBe(0);
+  });
+
+  it('should disallow nested render calls', function() {
+    spyOn(console, 'warn');
+    var Inner = React.createClass({
+      render: function() {
+        return <div />;
+      }
+    });
+    var Outer = React.createClass({
+      render: function() {
+        ReactTestUtils.renderIntoDocument(<Inner />);
+        return <div />;
+      }
+    });
+
+    ReactTestUtils.renderIntoDocument(<Outer />);
+    expect(console.warn.argsForCall.length).toBe(1);
+    expect(console.warn.argsForCall[0][0]).toBe(
+      'Warning: _renderNewRootComponent(): Render methods should ' +
+      'be a pure function of props and state; triggering nested component ' +
+      'updates from render is not allowed. If necessary, trigger nested ' +
+      'updates in componentDidUpdate.'
+    );
+  });
+
 });

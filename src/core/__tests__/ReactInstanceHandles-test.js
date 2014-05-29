@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -91,9 +91,9 @@ describe('ReactInstanceHandles', function() {
       parentNode.appendChild(childNodeA);
       parentNode.appendChild(childNodeB);
 
-      ReactMount.setID(parentNode, '.react[0]');
-      ReactMount.setID(childNodeA, '.react[0].0');
-      ReactMount.setID(childNodeB, '.react[0].0:1');
+      ReactMount.setID(parentNode, '.0');
+      ReactMount.setID(childNodeA, '.0.0');
+      ReactMount.setID(childNodeB, '.0.0:1');
 
       expect(
         ReactMount.findComponentRoot(
@@ -110,9 +110,9 @@ describe('ReactInstanceHandles', function() {
       parentNode.appendChild(childNodeA);
       parentNode.appendChild(childNodeB);
 
-      ReactMount.setID(parentNode, '.react[0]');
+      ReactMount.setID(parentNode, '.0');
       // No ID on `childNodeA`.
-      ReactMount.setID(childNodeB, '.react[0].0:1');
+      ReactMount.setID(childNodeB, '.0.0:1');
 
       expect(
         ReactMount.findComponentRoot(
@@ -129,9 +129,9 @@ describe('ReactInstanceHandles', function() {
       parentNode.appendChild(childNodeA);
       childNodeA.appendChild(childNodeB);
 
-      ReactMount.setID(parentNode, '.react[0]');
+      ReactMount.setID(parentNode, '.0');
       // No ID on `childNodeA`, it was "rendered by the browser".
-      ReactMount.setID(childNodeB, '.react[0].1:0');
+      ReactMount.setID(childNodeB, '.0.1:0');
 
       expect(ReactMount.findComponentRoot(
         parentNode,
@@ -144,20 +144,35 @@ describe('ReactInstanceHandles', function() {
           ReactMount.getID(childNodeB) + ":junk"
         );
       }).toThrow(
-        'Invariant Violation: findComponentRoot(..., .react[0].1:0:junk): ' +
+        'Invariant Violation: findComponentRoot(..., .0.1:0:junk): ' +
         'Unable to find element. This probably means the DOM was ' +
-        'unexpectedly mutated (e.g., by the browser). Try inspecting the ' +
-        'child nodes of the element with React ID `.react[0]`.'
+        'unexpectedly mutated (e.g., by the browser), usually due to ' +
+        'forgetting a <tbody> when using tables, nesting <p> or <a> tags, ' +
+        'or using non-SVG elements in an <svg> parent. Try inspecting the ' +
+        'child nodes of the element with React ' +
+        'ID `.0`.'
       );
     });
   });
 
   describe('getReactRootIDFromNodeID', function() {
     it('should support strings', function() {
-      var test = '.r[s_0_1][0]..[1]';
-      var expected = '.r[s_0_1]';
+      var test = '.s_0_1.0..1';
+      var expected = '.s_0_1';
       var actual = ReactInstanceHandles.getReactRootIDFromNodeID(test);
       expect(actual).toEqual(expected);
+    });
+  });
+
+  describe('getReactRootIDFromNodeID', function() {
+    it('should return null for invalid IDs', function() {
+      var getReactRootIDFromNodeID = (
+        ReactInstanceHandles.getReactRootIDFromNodeID
+      );
+
+      expect(getReactRootIDFromNodeID(null)).toEqual(null);
+      expect(getReactRootIDFromNodeID('.')).toEqual(null);
+      expect(getReactRootIDFromNodeID('#')).toEqual(null);
     });
   });
 

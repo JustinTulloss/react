@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 
 "use strict";
 
+var emptyObject = require('emptyObject');
 var invariant = require('invariant');
 
 /**
@@ -118,6 +119,10 @@ var ReactOwner = {
    */
   Mixin: {
 
+    construct: function() {
+      this.refs = emptyObject;
+    },
+
     /**
      * Lazily allocates the refs object and stores `component` as `ref`.
      *
@@ -132,7 +137,7 @@ var ReactOwner = {
         'attachRef(%s, ...): Only a component\'s owner can store a ref to it.',
         ref
       );
-      var refs = this.refs || (this.refs = {});
+      var refs = this.refs === emptyObject ? (this.refs = {}) : this.refs;
       refs[ref] = component;
     },
 

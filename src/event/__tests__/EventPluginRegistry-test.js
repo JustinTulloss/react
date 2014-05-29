@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,7 +135,8 @@ describe('EventPluginRegistry', function() {
       EventPluginRegistry.injectEventPluginOrder(pluginOrdering);
     }).toThrow(
       'Invariant Violation: EventPluginRegistry: Cannot inject event plugin ' +
-      'ordering more than once.'
+      'ordering more than once. You are likely trying to load more than one ' +
+      'copy of React.'
     );
   });
 

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,10 @@
 
 "use strict";
 
-var canUseDOM = typeof window !== 'undefined';
+var canUseDOM =
+  typeof window !== 'undefined' &&
+  window.document &&
+  typeof window.document.createElement === 'function';
 
 /**
  * Simple, lightweight module assisting with the detection and context of
@@ -33,6 +36,11 @@ var ExecutionEnvironment = {
   canUseDOM: canUseDOM,
 
   canUseWorkers: typeof Worker !== 'undefined',
+
+  canUseEventListeners:
+    canUseDOM && !!(window.addEventListener || window.attachEvent),
+
+  canUseViewport: canUseDOM && !!window.screen,
 
   isInWorker: !canUseDOM // For now, this is true - might change in the future.
 

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ var React = require('React');
 var ReactTestUtils = require('ReactTestUtils');
 var ReactMount = require('ReactMount');
 
-var objMapKeyVal = require('objMapKeyVal');
+var mapObject = require('mapObject');
 
 var stripEmptyValues = function(obj) {
   var ret = {};
@@ -42,11 +42,13 @@ var stripEmptyValues = function(obj) {
 };
 
 /**
- * Child key names are wrapped like '{key}[0]'. We strip the extra chars out
+ * Child key names are wrapped like '.$key:0'. We strip the extra chars out
  * here. This relies on an implementation detail of the rendering system.
  */
 var getOriginalKey = function(childName) {
-  return childName.slice('{'.length, childName.length - '}[0]'.length);
+  var match = childName.match(/^\.\$([^.]+)\:0$/);
+  expect(match).not.toBeNull();
+  return match[1];
 };
 
 /**
@@ -124,7 +126,7 @@ var FriendsStatusDisplay = React.createClass({
 
 
 function getInteralStateByUserName(statusDisplays) {
-  return objMapKeyVal(statusDisplays, function(key, statusDisplay) {
+  return mapObject(statusDisplays, function(statusDisplay, key) {
     return statusDisplay.getInternalState();
   });
 }

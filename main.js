@@ -1,12 +1,16 @@
 'use strict';
 
-var React = require('./build/modules/React');
-var visitors = require('./vendor/fbtransform/visitors').transformVisitors;
+var visitors = require('./vendor/fbtransform/visitors');
 var transform = require('jstransform').transform;
 
 module.exports = {
-  React: React,
-  transform: function(code) {
-    return transform(visitors.react, code).code;
+  transform: function(code, options) {
+    var visitorList;
+    if (options && options.harmony) {
+      visitorList = visitors.getAllVisitors();
+    } else {
+      visitorList = visitors.transformVisitors.react;
+    }
+    return transform(visitorList, code).code;
   }
 };

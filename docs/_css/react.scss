@@ -224,10 +224,11 @@ h1, h2, h3, h4, h5, h6 {
     margin: 0;
   }
   ul ul {
-    margin-left: 20px;
+    margin: 6px 0 0 20px;
   }
   li {
-    margin: 0;
+    line-height: 16px;
+    margin: 0 0 6px;
   }
   h3 {
     text-transform: uppercase;
@@ -683,7 +684,10 @@ p code {
 }
 
 .highlight pre code {
+  /* Cancel out styles for `li code` in case we have a <pre> within an <li>. */
+  background: none;
   font-size: inherit;
+  padding: 0;
 }
 
 .highlight pre .lineno {
@@ -743,4 +747,25 @@ p code {
   .next {
     float: right;
   }
+}
+
+// Twitter embeds. Need to !important because they inline margin on the iframe.
+div[data-twttr-id] iframe {
+  margin: 10px auto !important;
+}
+
+/* Acknowledgements */
+
+.three-column {
+  @include clearfix;
+}
+
+.three-column > ul {
+  float: left;
+  margin-left: 30px;
+  width: 190px;
+}
+
+.three-column > ul:first-child {
+  margin-left: 20px;
 }

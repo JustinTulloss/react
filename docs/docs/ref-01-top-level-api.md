@@ -11,9 +11,43 @@ next: component-api.html
 `React` is the entry point to the React framework. If you're using one of the prebuilt packages it's available as a global; if you're using CommonJS modules you can `require()` it.
 
 
+### React.Children
+
+`React.Children` provides utilities for dealing with the `this.props.children` opaque data structure.
+
+#### React.Children.map
+
+```javascript
+object React.Children.map(object children, function fn [, object context])
+```
+
+Invoke `fn` on every immediate child contained within `children` with `this` set to `context`. If `children` is a nested object or array it will be traversed: `fn` will never be passed the container objects. If children is `null` or `undefined` returns `null` or `undefined` rather than an empty object.
+
+#### React.Children.forEach
+
+```javascript
+React.Children.forEach(object children, function fn [, object context])
+```
+
+Like `React.Children.map()` but does not return an object.
+
+#### React.Children.only
+
+```javascript
+object React.Children.only(object children)
+```
+
+Return the only child in `children`. Throws otherwise.
+
+
 ### React.DOM
 
 `React.DOM` provides all of the standard HTML tags needed to build a React app. You generally don't use it directly; instead, just include it as part of the `/** @jsx React.DOM */` docblock.
+
+
+### React.PropTypes
+
+`React.PropTypes` includes types that can be used with a component's `propTypes` object to validate props being passed to your components. For more information about `propTypes`, see [Reusable Components](/react/docs/reusable-components.html).
 
 
 ### React.initializeTouchEvents
@@ -46,7 +80,7 @@ ReactComponent renderComponent(
 )
 ```
 
-Render a React component into the DOM in the supplied `container`.
+Render a React component into the DOM in the supplied `container` and return a reference to the component.
 
 If the React component was previously rendered into `container`, this will perform an update on it and only mutate the DOM as necessary to reflect the latest React component.
 
@@ -69,9 +103,18 @@ Remove a mounted React component from the DOM and clean up its event handlers an
 ### React.renderComponentToString
 
 ```javascript
-renderComponentToString(ReactComponent component, function callback)
+string renderComponentToString(ReactComponent component)
 ```
 
-Render a component to its initial HTML. This should only be used on the server. React will call `callback` with an HTML string when the markup is ready. You can use this method to can generate HTML on the server and send the markup down on the initial request for faster page loads and to allow search engines to crawl your pages for SEO purposes.
+Render a component to its initial HTML. This should only be used on the server. React will return an HTML string. You can use this method to generate HTML on the server and send the markup down on the initial request for faster page loads and to allow search engines to crawl your pages for SEO purposes.
 
 If you call `React.renderComponent()` on a node that already has this server-rendered markup, React will preserve it and only attach event handlers, allowing you to have a very performant first-load experience.
+
+
+### React.renderComponentToStaticMarkup
+
+```javascript
+string renderComponentToStaticMarkup(ReactComponent component)
+```
+
+Similar to `renderComponentToString`, except this doesn't create extra DOM attributes such as `data-react-id`, that React uses internally. This is useful if you want to use React as a simple static page generator, as stripping away the extra attributes can save lots of bytes.

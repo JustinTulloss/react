@@ -12,7 +12,7 @@ When designing interfaces, break down the common design elements (buttons, form 
 
 ## Prop Validation
 
-As your app grows it's helpful to ensure that your components are used correctly. We do this by allowing you to specify `propTypes`. `React.PropTypes` exports a range of validators that can be used to make sure the data you receive is valid. When an invalid value is provided for a prop, an error will be thrown. Here is an example documenting the different validators provided:
+As your app grows it's helpful to ensure that your components are used correctly. We do this by allowing you to specify `propTypes`. `React.PropTypes` exports a range of validators that can be used to make sure the data you receive is valid. When an invalid value is provided for a prop, a warning will be shown in the JavaScript console. Note that for performance reasons `propTypes` is only checked in development mode. Here is an example documenting the different validators provided:
 
 ```javascript
 React.createClass({
@@ -33,22 +33,43 @@ React.createClass({
     // A React component.
     optionalComponent: React.PropTypes.component,
 
-    // You can ensure that your prop is limited to specific values by treating
-    // it as an enum.
-    optionalEnum: React.PropTypes.oneOf(['News','Photos']),
-
     // You can also declare that a prop is an instance of a class. This uses
     // JS's instanceof operator.
-    someClass: React.PropTypes.instanceOf(SomeClass),
+    optionalMessage: React.PropTypes.instanceOf(Message),
 
-    // You can chain any of the above with isRequired to make sure an error is
-    // thrown if the prop isn't provided.
-    requiredFunc: React.PropTypes.func.isRequired
+    // You can ensure that your prop is limited to specific values by treating
+    // it as an enum.
+    optionalEnum: React.PropTypes.oneOf(['News', 'Photos']),
 
-    // You can also specify a custom validator.
+    // An object that could be one of many types
+    optionalUnion: React.PropTypes.oneOfType([
+      React.PropTypes.string,
+      React.PropTypes.number,
+      React.PropTypes.instanceOf(Message)
+    ]),
+
+    // An array of a certain type
+    optionalArrayOf: React.PropTypes.arrayOf(React.PropTypes.number),
+
+    // An object taking on a particular shape
+    optionalObjectWithShape: React.PropTypes.shape({
+      color: React.PropTypes.string,
+      fontSize: React.PropTypes.number
+    }),
+
+    // You can chain any of the above with `isRequired` to make sure a warning
+    // is shown if the prop isn't provided.
+    requiredFunc: React.PropTypes.func.isRequired,
+
+    // A value of any data type
+    requiredAny: React.PropTypes.any.isRequired,
+
+    // You can also specify a custom validator. It should return an Error
+    // object if the validation fails. Don't `console.warn` or throw, as this
+    // won't work inside `oneOfType`.
     customProp: function(props, propName, componentName) {
       if (!/matchme/.test(props[propName])) {
-        throw new Error('Validation failed!')
+        return new Error('Validation failed!');
       }
     }
   },
@@ -123,7 +144,7 @@ var MyComponent = React.createClass({
 
 Components are the best way to reuse code in React, but sometimes very different components may share some common functionality. These are sometimes called [cross-cutting concerns](http://en.wikipedia.org/wiki/Cross-cutting_concern). React provides `mixins` to solve this problem.
 
-One common use case is a component wanting to update itself on a time interval. It's easy to use `setInterval()`, but it's important to cancel your interval when you don't need it anymore to save memory. React provides [lifecycle methods](/react/docs/working-with-the-browser.html) that let you know when a component is about to be created or destroyed. Let's create a simple mixin that uses these methods to provide an easy `setInterval()` function that will automatically get cleaned up when your component is destroyed.
+One common use case is a component wanting to update itself on a time interval. It's easy to use `setInterval()`, but it's important to cancel your interval when you don't need it anymore to save memory. React provides [lifecycle methods](/react/docs/working-with-the-browser.html#component-lifecycle) that let you know when a component is about to be created or destroyed. Let's create a simple mixin that uses these methods to provide an easy `setInterval()` function that will automatically get cleaned up when your component is destroyed.
 
 ```javascript
 /** @jsx React.DOM */

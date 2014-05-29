@@ -22,6 +22,8 @@ The `render()` method is required.
 
 When called, it should examine `this.props` and `this.state` and return a single child component. This child component can be either a virtual representation of a native DOM component (such as `<div />` or `React.DOM.div()`) or another composite component that you've defined yourself.
 
+You can also return `null` or `false` to indicate that you don't want anything rendered. Behind the scenes, React renders a `<script>` tag to work with our current diffing algorithm. When returning `null` or `false`, `this.getDOMNode()` will return `null`.
+
 The `render()` function should be *pure*, meaning that it does not modify component state, it returns the same result each time it's invoked, and it does not read from or write to the DOM or otherwise interact with the browser (e.g., by using `setTimeout`). If you need to interact with the browser, perform your work in `componentDidMount()` or the other lifecycle methods instead. Keeping `render()` pure makes server rendering more practical and makes components easier to think about.
 
 
@@ -53,8 +55,6 @@ object propTypes
 
 The `propTypes` object allows you to validate props being passed to your components. For more information about `propTypes`, see [Reusable Components](/react/docs/reusable-components.html).
 
-<!-- TODO: Document propTypes here directly. -->
-
 
 ### mixins
 
@@ -64,7 +64,30 @@ array mixins
 
 The `mixins` array allows you to use mixins to share behavior among multiple components. For more information about mixins, see [Reusable Components](/react/docs/reusable-components.html).
 
-<!-- TODO: Document mixins here directly. -->
+
+### statics
+
+```javascript
+object statics
+```
+
+The `statics` object allows you to define static methods that can be called on the component class. For example:
+
+```javascript
+var MyComponent = React.createClass({
+  statics: {
+    customMethod: function(foo) {
+      return foo === 'bar';
+    }
+  },
+  render: function() {
+  }
+});
+
+MyComponent.customMethod('bar');  // true
+```
+
+Methods defined within this block are _static_, meaning that you can run them before any component instances are created, and the methods do not have access to the props or state of your components. If you want to check the value of props in a static method, have the caller pass in the props as an argument to the static method.
 
 
 ### displayName
@@ -87,7 +110,7 @@ Various methods are executed at specific points in a component's lifecycle.
 componentWillMount()
 ```
 
-Invoked once, immediately before the initial rendering occurs. If you call `setState` within this method, `render()` will see the updated state and will be executed only once despite the state change.
+Invoked once, both on the client and server, immediately before the initial rendering occurs. If you call `setState` within this method, `render()` will see the updated state and will be executed only once despite the state change.
 
 
 ### Mounting: componentDidMount
@@ -96,13 +119,13 @@ Invoked once, immediately before the initial rendering occurs. If you call `setS
 componentDidMount()
 ```
 
-Invoked immediately after rendering occurs. At this point in the lifecycle, the component has a DOM representation which you can access via `this.getDOMNode()`.
+Invoked immediately after rendering occurs, only on the client (not on the server). At this point in the lifecycle, the component has a DOM representation which you can access via `this.getDOMNode()`.
 
 If you want to integrate with other JavaScript frameworks, set timers using `setTimeout` or `setInterval`, or send AJAX requests, perform those operations in this method.
 
 > Note:
 >
-> Prior to v0.6, the DOM node was passed in as the last argument. If you were using this, you can still access the DOM node by calling `this.getDOMNode()`.
+> Prior to v0.9, the DOM node was passed in as the last argument. If you were using this, you can still access the DOM node by calling `this.getDOMNode()`.
 
 
 ### Updating: componentWillReceiveProps
@@ -179,7 +202,7 @@ Use this as an opportunity to operate on the DOM when the component has been upd
 
 > Note:
 >
-> Prior to v0.6, the DOM node was passed in as the last argument. If you were using this, you can still access the DOM node by calling `this.getDOMNode()`.
+> Prior to v0.9, the DOM node was passed in as the last argument. If you were using this, you can still access the DOM node by calling `this.getDOMNode()`.
 
 
 ### Unmounting: componentWillUnmount

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ describe('EventPluginHub', function() {
     require('mock-modules').dumpCache();
     EventPluginHub = require('EventPluginHub');
     isEventSupported = require('isEventSupported');
-    isEventSupported.mockReturnValue(false);
+    isEventSupported.mockReturnValueOnce(false);
   });
 
   it('should warn about the `onScroll` issue on IE8', function() {
@@ -42,4 +42,12 @@ describe('EventPluginHub', function() {
     );
   });
 
+  it("should prevent non-function listeners", function() {
+    expect(function() {
+      EventPluginHub.putListener(1, 'onClick', 'not a function');
+    }).toThrow(
+      'Invariant Violation: Expected onClick listener to be a function, ' +
+      'instead got type string'
+    );
+  });
 });

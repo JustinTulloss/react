@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ var renderXJSExpressionContainer =
 var renderXJSLiteral = require('./xjs').renderXJSLiteral;
 var quoteAttrName = require('./xjs').quoteAttrName;
 
+var trimLeft = require('./xjs').trimLeft;
+
 /**
  * Customized desugar processor.
  *
@@ -41,75 +43,75 @@ var quoteAttrName = require('./xjs').quoteAttrName;
 
 var JSX_ATTRIBUTE_TRANSFORMS = {
   cxName: function(attr) {
-    if (attr.value.type !== Syntax.Literal) {
-      throw new Error("cx only accepts a string literal");
-    } else {
-      var classNames = attr.value.value.split(/\s+/g);
-      return 'cx(' + classNames.map(JSON.stringify).join(',') + ')';
-    }
+    throw new Error(
+      "cxName is no longer supported, use className={cx(...)} instead"
+    );
   }
 };
 
 function visitReactTag(traverse, object, path, state) {
   var jsxObjIdent = utils.getDocblock(state).jsx;
+  var openingElement = object.openingElement;
+  var nameObject = openingElement.name;
+  var attributesObject = openingElement.attributes;
 
-  utils.catchup(object.openingElement.range[0], state);
+  utils.catchup(openingElement.range[0], state, trimLeft);
 
-  if (object.name.namespace) {
-    throw new Error(
-       'Namespace tags are not supported. ReactJSX is not XML.');
+  var isFallbackTag = false;
+
+  if (nameObject.type === Syntax.XJSIdentifier) {
+    if (nameObject.namespace) {
+      throw new Error(
+         'Namespace tags are not supported. ReactJSX is not XML.');
+    }
+
+    isFallbackTag = FALLBACK_TAGS.hasOwnProperty(nameObject.name);
   }
 
-  var isFallbackTag = FALLBACK_TAGS[object.name.name];
-  utils.append(
-    (isFallbackTag ? jsxObjIdent + '.' : '') + (object.name.name) + '(',
-    state
-  );
+  utils.append(isFallbackTag ? jsxObjIdent + '.' : '', state);
 
-  utils.move(object.name.range[1], state);
+  utils.move(nameObject.range[0], state);
+  utils.catchup(nameObject.range[1], state);
 
-  var childrenToRender = object.children.filter(function(child) {
-    return !(child.type === Syntax.Literal && !child.value.match(/\S/));
-  });
+  utils.append('(', state);
+
+  var hasAttributes = attributesObject.length;
 
   // if we don't have any attributes, pass in null
-  if (object.attributes.length === 0) {
+  if (hasAttributes) {
+    utils.append('{', state);
+  } else {
     utils.append('null', state);
   }
 
   // write attributes
-  object.attributes.forEach(function(attr, index) {
-    utils.catchup(attr.range[0], state);
+  attributesObject.forEach(function(attr, index) {
     if (attr.name.namespace) {
       throw new Error(
          'Namespace attributes are not supported. ReactJSX is not XML.');
     }
     var name = attr.name.name;
-    var isFirst = index === 0;
-    var isLast = index === object.attributes.length - 1;
+    var isLast = index === attributesObject.length - 1;
 
-    if (isFirst) {
-      utils.append('{', state);
-    }
-
+    utils.catchup(attr.range[0], state, trimLeft);
     utils.append(quoteAttrName(name), state);
-    utils.append(':', state);
+    utils.append(': ', state);
 
     if (!attr.value) {
       state.g.buffer += 'true';
       state.g.position = attr.name.range[1];
       if (!isLast) {
-        utils.append(',', state);
+        utils.append(', ', state);
       }
     } else {
       utils.move(attr.name.range[1], state);
-      // Use catchupWhiteSpace to skip over the '=' in the attribute
-      utils.catchupWhiteSpace(attr.value.range[0], state);
-      if (JSX_ATTRIBUTE_TRANSFORMS[attr.name.name]) {
+      // Use catchupNewlines to skip over the '=' in the attribute
+      utils.catchupNewlines(attr.value.range[0], state);
+      if (JSX_ATTRIBUTE_TRANSFORMS.hasOwnProperty(attr.name.name)) {
         utils.append(JSX_ATTRIBUTE_TRANSFORMS[attr.name.name](attr), state);
         utils.move(attr.value.range[1], state);
         if (!isLast) {
-          utils.append(',', state);
+          utils.append(', ', state);
         }
       } else if (attr.value.type === Syntax.Literal) {
         renderXJSLiteral(attr.value, isLast, state);
@@ -118,29 +120,42 @@ function visitReactTag(traverse, object, path, state) {
       }
     }
 
-    if (isLast) {
-      utils.append('}', state);
-    }
-
-    utils.catchup(attr.range[1], state);
+    utils.catchup(attr.range[1], state, trimLeft);
   });
 
-  if (!object.selfClosing) {
-    utils.catchup(object.openingElement.range[1] - 1, state);
-    utils.move(object.openingElement.range[1], state);
+  if (!openingElement.selfClosing) {
+    utils.catchup(openingElement.range[1] - 1, state, trimLeft);
+    utils.move(openingElement.range[1], state);
+  }
+
+  if (hasAttributes) {
+    utils.append('}', state);
   }
 
   // filter out whitespace
+  var childrenToRender = object.children.filter(function(child) {
+    return !(child.type === Syntax.Literal
+             && typeof child.value === 'string'
+             && child.value.match(/^[ \t]*[\r\n][ \t\r\n]*$/));
+  });
   if (childrenToRender.length > 0) {
-    utils.append(', ', state);
+    var lastRenderableIndex;
 
-    object.children.forEach(function(child) {
-      if (child.type === Syntax.Literal && !child.value.match(/\S/)) {
-        return;
+    childrenToRender.forEach(function(child, index) {
+      if (child.type !== Syntax.XJSExpressionContainer ||
+          child.expression.type !== Syntax.XJSEmptyExpression) {
+        lastRenderableIndex = index;
       }
-      utils.catchup(child.range[0], state);
+    });
 
-      var isLast = child === childrenToRender[childrenToRender.length - 1];
+    if (lastRenderableIndex !== undefined) {
+      utils.append(', ', state);
+    }
+
+    childrenToRender.forEach(function(child, index) {
+      utils.catchup(child.range[0], state, trimLeft);
+
+      var isLast = index >= lastRenderableIndex;
 
       if (child.type === Syntax.Literal) {
         renderXJSLiteral(child, isLast, state);
@@ -149,22 +164,21 @@ function visitReactTag(traverse, object, path, state) {
       } else {
         traverse(child, path, state);
         if (!isLast) {
-          utils.append(',', state);
-          state.g.buffer = state.g.buffer.replace(/(\s*),$/, ',$1');
+          utils.append(', ', state);
         }
       }
 
-      utils.catchup(child.range[1], state);
+      utils.catchup(child.range[1], state, trimLeft);
     });
   }
 
-  if (object.selfClosing) {
+  if (openingElement.selfClosing) {
     // everything up to />
-    utils.catchup(object.openingElement.range[1] - 2, state);
-    utils.move(object.openingElement.range[1], state);
+    utils.catchup(openingElement.range[1] - 2, state, trimLeft);
+    utils.move(openingElement.range[1], state);
   } else {
     // everything up to </ sdflksjfd>
-    utils.catchup(object.closingElement.range[0], state);
+    utils.catchup(object.closingElement.range[0], state, trimLeft);
     utils.move(object.closingElement.range[1], state);
   }
 
@@ -178,4 +192,6 @@ visitReactTag.test = function(object, path, state) {
   return object.type === Syntax.XJSElement && jsx && jsx.length;
 };
 
-exports.visitReactTag = visitReactTag;
+exports.visitorList = [
+  visitReactTag
+];

@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,7 +140,7 @@ var knownTags = {
   mark: true,
   marker: true,
   marquee: true,
-  mask: true,
+  mask: false,
   menu: true,
   menuitem: true,
   meta: true,
@@ -158,7 +158,7 @@ var knownTags = {
   p: true,
   param: true,
   path: true,
-  pattern: true,
+  pattern: false,
   polygon: true,
   polyline: true,
   pre: true,
@@ -200,7 +200,6 @@ var knownTags = {
   title: true,
   tr: true,
   track: true,
-  tref: true,
   tspan: true,
   u: true,
   ul: true,
@@ -212,118 +211,67 @@ var knownTags = {
   wbr: true
 };
 
-function safeTrim(string) {
-  return string.replace(/^[ \t]+/, '').replace(/[ \t]+$/, '');
-}
-
-// Replace all trailing whitespace characters with a single space character
-function trimWithSingleSpace(string) {
-  return string.replace(/^[ \t\xA0]{2,}/, ' ').
-    replace(/[ \t\xA0]{2,}$/, ' ').replace(/^\s+$/, '');
-}
-
-/**
- * Special handling for multiline string literals
- * print lines:
- *
- *   line
- *   line
- *
- * as:
- *
- *   "line "+
- *   "line"
- */
 function renderXJSLiteral(object, isLast, state, start, end) {
-  /** Added blank check filtering and triming*/
-  var trimmedChildValue = safeTrim(object.value);
-  var hasFinalNewLine = false;
+  var lines = object.value.split(/\r\n|\n|\r/);
 
-  if (trimmedChildValue) {
-    // head whitespace
-    utils.append(object.value.match(/^[\t ]*/)[0], state);
-    if (start) {
-      utils.append(start, state);
+  if (start) {
+    utils.append(start, state);
+  }
+
+  var lastNonEmptyLine = 0;
+
+  lines.forEach(function (line, index) {
+    if (line.match(/[^ \t]/)) {
+      lastNonEmptyLine = index;
+    }
+  });
+
+  lines.forEach(function (line, index) {
+    var isFirstLine = index === 0;
+    var isLastLine = index === lines.length - 1;
+    var isLastNonEmptyLine = index === lastNonEmptyLine;
+
+    // replace rendered whitespace tabs with spaces
+    var trimmedLine = line.replace(/\t/g, ' ');
+
+    // trim whitespace touching a newline
+    if (!isFirstLine) {
+      trimmedLine = trimmedLine.replace(/^[ ]+/, '');
+    }
+    if (!isLastLine) {
+      trimmedLine = trimmedLine.replace(/[ ]+$/, '');
     }
 
-    var trimmedChildValueWithSpace = trimWithSingleSpace(object.value);
-
-    /**
-     */
-    var initialLines = trimmedChildValue.split(/\r\n|\n|\r/);
-
-    var lines = initialLines.filter(function(line) {
-      return safeTrim(line).length > 0;
-    });
-
-    var hasInitialNewLine = initialLines[0] !== lines[0];
-    hasFinalNewLine =
-      initialLines[initialLines.length - 1] !== lines[lines.length - 1];
-
-    var numLines = lines.length;
-    lines.forEach(function (line, ii) {
-      var lastLine = ii === numLines - 1;
-      var trimmedLine = safeTrim(line);
-      if (trimmedLine === '' && !lastLine) {
-        utils.append(line, state);
-      } else {
-        var preString = '';
-        var postString = '';
-        var leading = line.match(/^[ \t]*/)[0];
-
-        if (ii === 0) {
-          if (hasInitialNewLine) {
-            preString = ' ';
-            leading = '\n' + leading;
-          }
-          if (trimmedChildValueWithSpace.substring(0, 1) === ' ') {
-            // If this is the first line, and the original content starts with
-            // whitespace, place a single space at the beginning.
-            preString = ' ';
-          }
-        }
-        if (!lastLine || trimmedChildValueWithSpace.substr(
-             trimmedChildValueWithSpace.length - 1, 1) === ' ' ||
-             hasFinalNewLine
-             ) {
-          // If either not on the last line, or the original content ends with
-          // whitespace, place a single character at the end.
-          postString = ' ';
-        }
-
-        utils.append(
-          leading +
-          JSON.stringify(
-            preString + trimmedLine + postString
-          ) +
-          (lastLine ? '' : '+') +
-          line.match(/[ \t]*$/)[0],
-          state);
-      }
-      if (!lastLine) {
-        utils.append('\n', state);
-      }
-    });
-  } else {
-    if (start) {
-      utils.append(start, state);
+    if (!isFirstLine) {
+      utils.append(line.match(/^[ \t]*/)[0], state);
     }
-    utils.append('""', state);
-  }
-  if (end) {
-    utils.append(end, state);
-  }
 
-  // add comma before trailing whitespace
-  if (!isLast) {
-    utils.append(',', state);
-  }
+    if (trimmedLine || isLastNonEmptyLine) {
+      utils.append(
+        JSON.stringify(trimmedLine) +
+        (!isLastNonEmptyLine ? " + ' ' +" : ''),
+        state);
 
-  // tail whitespace
-  if (hasFinalNewLine) {
-    utils.append('\n', state);
-  }
-  utils.append(object.value.match(/[ \t]*$/)[0], state);
+      if (isLastNonEmptyLine) {
+        if (end) {
+          utils.append(end, state);
+        }
+        if (!isLast) {
+          utils.append(', ', state);
+        }
+      }
+
+      // only restore tail whitespace if line had literals
+      if (trimmedLine && !isLastLine) {
+        utils.append(line.match(/[ \t]*$/)[0], state);
+      }
+    }
+
+    if (!isLastLine) {
+      utils.append('\n', state);
+    }
+  });
+
   utils.move(object.range[1], state);
 }
 
@@ -331,14 +279,15 @@ function renderXJSExpressionContainer(traverse, object, isLast, path, state) {
   // Plus 1 to skip `{`.
   utils.move(object.range[0] + 1, state);
   traverse(object.expression, path, state);
+
   if (!isLast && object.expression.type !== Syntax.XJSEmptyExpression) {
     // If we need to append a comma, make sure to do so after the expression.
-    utils.catchup(object.expression.range[1], state);
-    utils.append(',', state);
+    utils.catchup(object.expression.range[1], state, trimLeft);
+    utils.append(', ', state);
   }
 
   // Minus 1 to skip `}`.
-  utils.catchup(object.range[1] - 1, state);
+  utils.catchup(object.range[1] - 1, state, trimLeft);
   utils.move(object.range[1], state);
   return false;
 }
@@ -351,7 +300,12 @@ function quoteAttrName(attr) {
   return attr;
 }
 
+function trimLeft(value) {
+  return value.replace(/^[ ]+/, '');
+}
+
 exports.knownTags = knownTags;
 exports.renderXJSExpressionContainer = renderXJSExpressionContainer;
 exports.renderXJSLiteral = renderXJSLiteral;
 exports.quoteAttrName = quoteAttrName;
+exports.trimLeft = trimLeft;

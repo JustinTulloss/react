@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,16 +19,18 @@
 
 "use strict";
 
-require('mock-modules').dontMock('cloneWithProps');
+require('mock-modules')
+  .dontMock('cloneWithProps')
+  .dontMock('emptyObject');
 
 var mocks = require('mocks');
-
-var cloneWithProps = require('cloneWithProps');
 
 var React;
 var ReactTestUtils;
 
 var onlyChild;
+var cloneWithProps;
+var emptyObject;
 
 describe('cloneWithProps', function() {
 
@@ -36,6 +38,8 @@ describe('cloneWithProps', function() {
     React = require('React');
     ReactTestUtils = require('ReactTestUtils');
     onlyChild = require('onlyChild');
+    cloneWithProps = require('cloneWithProps');
+    emptyObject = require('emptyObject');
   });
 
   it('should clone a DOM component with new props', function() {
@@ -55,7 +59,7 @@ describe('cloneWithProps', function() {
     });
     var component = ReactTestUtils.renderIntoDocument(<Grandparent />);
     expect(component.getDOMNode().childNodes[0].className)
-      .toBe('child xyz');
+      .toBe('xyz child');
   });
 
   it('should clone a composite component with new props', function() {
@@ -82,7 +86,7 @@ describe('cloneWithProps', function() {
     });
     var component = ReactTestUtils.renderIntoDocument(<Grandparent />);
     expect(component.getDOMNode().childNodes[0].className)
-      .toBe('child xyz');
+      .toBe('xyz child');
   });
 
   it('should warn when cloning with refs', function() {
@@ -107,10 +111,88 @@ describe('cloneWithProps', function() {
       console.warn = mocks.getMockFunction();
 
       var component = ReactTestUtils.renderIntoDocument(<Grandparent />);
-      expect(component.refs).toBe(undefined);
+      expect(component.refs).toBe(emptyObject);
       expect(console.warn.mock.calls.length).toBe(1);
     } finally {
       console.warn = _warn;
     }
+  });
+
+  it('should transfer the key property', function() {
+    var Component = React.createClass({
+      render: function() {
+        expect(this.props.key).toBe('xyz');
+        return <div />;
+      }
+    });
+
+    ReactTestUtils.renderIntoDocument(
+      cloneWithProps(<Component />, {key: 'xyz'})
+    );
+  });
+
+  it('should transfer children', function() {
+    var Component = React.createClass({
+      render: function() {
+        expect(this.props.children).toBe('xyz');
+        return <div />;
+      }
+    });
+
+    ReactTestUtils.renderIntoDocument(
+      cloneWithProps(<Component />, {children: 'xyz'})
+    );
+  });
+
+  it('should shallow clone children', function() {
+    var Component = React.createClass({
+      render: function() {
+        expect(this.props.children).toBe('xyz');
+        return <div />;
+      }
+    });
+
+    ReactTestUtils.renderIntoDocument(
+      cloneWithProps(<Component>xyz</Component>, {})
+    );
+  });
+
+  it('should support keys and refs', function() {
+    var Component = React.createClass({
+      render: function() {
+        expect(this.props.key).toBe('xyz');
+        expect(this.props.ref).toBe('xyz');
+        return <div />;
+      }
+    });
+
+    var Parent = React.createClass({
+      render: function() {
+        var clone =
+          cloneWithProps(this.props.children, {key: 'xyz', ref: 'xyz'});
+        return <div>{clone}</div>;
+      }
+    });
+
+    var Grandparent = React.createClass({
+      render: function() {
+        return <Parent><Component key="abc" /></Parent>;
+      }
+    });
+
+    ReactTestUtils.renderIntoDocument(<Grandparent />);
+  });
+
+  it('should overwrite props', function() {
+    var Component = React.createClass({
+      render: function() {
+        expect(this.props.myprop).toBe('xyz');
+        return <div />;
+      }
+    });
+
+    ReactTestUtils.renderIntoDocument(
+      cloneWithProps(<Component myprop="abc" />, {myprop: 'xyz'})
+    );
   });
 });

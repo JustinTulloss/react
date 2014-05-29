@@ -10,7 +10,7 @@ next: more-about-refs.html
 React provides powerful abstractions that free you from touching the DOM directly in most cases, but sometimes you simply need to access the underlying API, perhaps to work with a third-party library or existing code.
 
 
-## The Mock DOM
+## The Virtual DOM
 
 React is so fast because it never talks to the DOM directly. React maintains a fast in-memory representation of the DOM. `render()` methods return a *description* of the DOM, and React can diff this description with the in-memory representation to compute the fastest way to update the browser.
 
@@ -121,19 +121,23 @@ In addition to that philosophy, we've also taken the stance that we, as authors 
 * `Array.prototype.some`
 * `Date.now`
 * `Function.prototype.bind`
+* `Object.keys`
 
 `es5-sham.js`, also from [kriskowal's es5-shim](https://github.com/kriskowal/es5-shim), provides the following that React needs:
 
 * `Object.create`
+* `Object.freeze`
 
 The unminified build of React needs the following from [paulmillr's console-polyfill](https://github.com/paulmillr/console-polyfill).
 
 * `console.*`
 
+When using HTML5 elements in IE8 including `<section>`, `<article>`, `<nav>`, `<header>`, and `<footer>`, it's also necessary to include [html5shiv](https://github.com/aFarkas/html5shiv) or a similar script.
+
 
 ### Cross-browser Issues
 
-Although React is pretty good at abstracting browser differences, some browsers are limited or present quirky behaviors that we couldn't find a workaround.
+Although React is pretty good at abstracting browser differences, some browsers are limited or present quirky behaviors that we couldn't find a workaround for.
 
 
 #### onScroll event on IE8

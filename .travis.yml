@@ -7,7 +7,7 @@ script:
     grunt $TEST_TYPE
 after_script:
 - |
-    if [ "$TEST_TYPE" = test:full ] && [ "$SERVER" ]; then
+    if [ "$TEST_TYPE" = test ] && [ "$SERVER" ]; then
       grunt build
       curl \
         -F "react=@build/react.js" \
@@ -15,6 +15,8 @@ after_script:
         -F "transformer=@build/JSXTransformer.js" \
         -F "react-with-addons=@build/react-with-addons.js" \
         -F "react-with-addons.min=@build/react-with-addons.min.js" \
+        -F "npm-react=@build/react.tgz" \
+        -F "npm-react-tools=@build/react-tools.tgz" \
         -F "commit=$TRAVIS_COMMIT" \
         -F "date=`git log --format='%ct' -1`" \
         -F "pull_request=$TRAVIS_PULL_REQUEST" \
@@ -24,10 +26,11 @@ after_script:
     fi
 env:
   matrix:
-  - TEST_TYPE=test:full
+  - TEST_TYPE=test
   - TEST_TYPE=lint
   - TEST_TYPE=perf:full
   - TEST_TYPE=test:coverage
+  - TEST_TYPE=test:webdriver:saucelabs:modern
   - TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie11
   - TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie10
   - TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie9
@@ -45,6 +48,7 @@ matrix:
     - env: TEST_TYPE=lint
     - env: TEST_TYPE=test:coverage
     - env: TEST_TYPE=perf:full
+    - env: TEST_TYPE=test:webdriver:saucelabs:modern
     - env: TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie11
     - env: TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie10
     - env: TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie9

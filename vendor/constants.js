@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,6 +81,17 @@ function transform(ast, constants) {
           )
         );
         return false;
+      } else if (namedTypes.Identifier.check(node.callee) &&
+          node.callee.name === 'warning') {
+        // Eliminate warning(condition, ...) statements based on NODE_ENV
+        // (dead code removal will remove the extra bytes).
+        this.replace(
+          builders.conditionalExpression(
+            DEV_EXPRESSION,
+            node,
+            builders.literal(null)
+          )
+        );
       }
     }
   });

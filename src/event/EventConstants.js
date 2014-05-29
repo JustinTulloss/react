@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ var topLevelTypes = keyMirror({
   topDragOver: null,
   topDragStart: null,
   topDrop: null,
+  topError: null,
   topFocus: null,
   topInput: null,
   topKeyDown: null,
@@ -56,9 +57,11 @@ var topLevelTypes = keyMirror({
   topMouseOver: null,
   topMouseUp: null,
   topPaste: null,
+  topReset: null,
   topScroll: null,
   topSelectionChange: null,
   topSubmit: null,
+  topTextInput: null,
   topTouchCancel: null,
   topTouchEnd: null,
   topTouchMove: null,

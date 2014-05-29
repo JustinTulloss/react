@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ describe('ReactCompositeComponentDOMMinimalism', function() {
         A string child
       </MyCompositeComponent>
     );
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expectSingleChildlessDiv(instance);
   });
 
@@ -88,7 +88,7 @@ describe('ReactCompositeComponentDOMMinimalism', function() {
         {'Interpolated String Child'}
       </MyCompositeComponent>
     );
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     expectSingleChildlessDiv(instance);
   });
 
@@ -100,7 +100,7 @@ describe('ReactCompositeComponentDOMMinimalism', function() {
         </ul>
       </MyCompositeComponent>
     );
-    ReactTestUtils.renderIntoDocument(instance);
+    instance = ReactTestUtils.renderIntoDocument(instance);
     reactComponentExpect(instance)
       .expectRenderedChild()
       .toBeCompositeComponentWithType(LowerLevelComposite)

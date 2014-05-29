@@ -3,10 +3,10 @@ id: tutorial
 title: Tutorial
 layout: docs
 prev: getting-started.html
-next: videos.html
+next: thinking-in-react.html
 ---
 
-We'll be building a simple, but realistic comments box that you can drop into a blog, similar to Disqus, LiveFyre or Facebook comments.
+We'll be building a simple, but realistic comments box that you can drop into a blog, a basic version of the realtime comments offered by Disqus, LiveFyre or Facebook comments.
 
 We'll provide:
 
@@ -88,18 +88,17 @@ The first thing you'll notice is the XML-ish syntax in your JavaScript. We have 
 
 ```javascript
 // tutorial1-raw.js
-var CommentBox = React.createClass({
+var CommentBox = React.createClass({displayName: 'CommentBox',
   render: function() {
     return (
-      React.DOM.div({
-        className: 'commentBox',
-        children: 'Hello, world! I am a CommentBox.'
-      })
+      React.DOM.div({className: "commentBox"}, 
+        "Hello, world! I am a CommentBox."
+      )
     );
   }
 });
 React.renderComponent(
-  CommentBox({}),
+  CommentBox(null),
   document.getElementById('content')
 );
 ```
@@ -210,12 +209,13 @@ Markdown is a simple way to format your text inline. For example, surrounding te
 
 First, add the third-party **Showdown** library to your application. This is a JavaScript library which takes Markdown text and converts it to raw HTML. This requires a script tag in your head (which we have already included in the React playground):
 
-```html{6}
+```html{7}
 <!-- template.html -->
 <head>
   <title>Hello React</title>
   <script src="http://fb.me/react-{{site.react_version}}.js"></script>
   <script src="http://fb.me/JSXTransformer-{{site.react_version}}.js"></script>
+  <script src="http://code.jquery.com/jquery-1.10.0.min.js"></script>
   <script src="http://cdnjs.cloudflare.com/ajax/libs/showdown/0.3.1/showdown.min.js"></script>
 </head>
 ```
@@ -303,7 +303,7 @@ React.renderComponent(
 
 Now that the data is available in the `CommentList`, let's render the comments dynamically:
 
-```javascript{4-6}
+```javascript{4-6,9}
 // tutorial10.js
 var CommentList = React.createClass({
   render: function() {
@@ -386,13 +386,13 @@ var CommentBox = React.createClass({
   },
   componentWillMount: function() {
     $.ajax({
-      url: 'comments.json',
+      url: this.props.url,
       dataType: 'json',
       success: function(data) {
         this.setState({data: data});
       }.bind(this),
       error: function(xhr, status, err) {
-        console.error("comments.json", status, err.toString());
+        console.error(this.props.url, status, err.toString());
       }.bind(this)
     });
   },
@@ -408,9 +408,9 @@ var CommentBox = React.createClass({
 });
 ```
 
-Here, `componentWillMount` is a method called automatically by React before a component is rendered. The key to dynamic updates is the call to `this.setState()`. We replace the old array of comments with the new one from the server and the UI automatically updates itself. Because of this reactivity, it is trivial to add live updates. We will use simple polling here but you could easily use WebSockets or other technologies.
+Here, `componentWillMount` is a method called automatically by React before a component is rendered. The key to dynamic updates is the call to `this.setState()`. We replace the old array of comments with the new one from the server and the UI automatically updates itself. Because of this reactivity, it is only a minor change to add live updates. We will use simple polling here but you could easily use WebSockets or other technologies.
 
-```javascript{3,16-17,31}
+```javascript{3,19-20,34}
 // tutorial14.js
 var CommentBox = React.createClass({
   loadCommentsFromServer: function() {
@@ -419,6 +419,9 @@ var CommentBox = React.createClass({
       dataType: 'json',
       success: function(data) {
         this.setState({data: data});
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.error(this.props.url, status, err.toString());
       }.bind(this)
     });
   },
@@ -516,7 +519,7 @@ When a user submits a comment, we will need to refresh the list of comments to i
 
 We need to pass data from the child component to its parent. We do this by passing a `callback` in props from parent to child:
 
-```javascript{12-14,28}
+```javascript{15-17,31}
 // tutorial17.js
 var CommentBox = React.createClass({
   loadCommentsFromServer: function() {
@@ -525,6 +528,9 @@ var CommentBox = React.createClass({
       dataType: 'json',
       success: function(data) {
         this.setState({data: data});
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.error(this.props.url, status, err.toString());
       }.bind(this)
     });
   },
@@ -583,7 +589,7 @@ var CommentForm = React.createClass({
 
 Now that the callbacks are in place, all we have to do is submit to the server and refresh the list:
 
-```javascript{13-21}
+```javascript{16-27}
 // tutorial19.js
 var CommentBox = React.createClass({
   loadCommentsFromServer: function() {
@@ -592,6 +598,9 @@ var CommentBox = React.createClass({
       dataType: 'json',
       success: function(data) {
         this.setState({data: data});
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.error(this.props.url, status, err.toString());
       }.bind(this)
     });
   },
@@ -603,6 +612,9 @@ var CommentBox = React.createClass({
       data: comment,
       success: function(data) {
         this.setState({data: data});
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.error(this.props.url, status, err.toString());
       }.bind(this)
     });
   },
@@ -631,7 +643,7 @@ var CommentBox = React.createClass({
 
 Our application is now feature complete but it feels slow to have to wait for the request to complete before your comment appears in the list. We can optimistically add this comment to the list to make the app feel faster.
 
-```javascript{13-15}
+```javascript{16-18}
 // tutorial20.js
 var CommentBox = React.createClass({
   loadCommentsFromServer: function() {
@@ -640,6 +652,9 @@ var CommentBox = React.createClass({
       dataType: 'json',
       success: function(data) {
         this.setState({data: data});
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.error(this.props.url, status, err.toString());
       }.bind(this)
     });
   },
@@ -654,6 +669,9 @@ var CommentBox = React.createClass({
       data: comment,
       success: function(data) {
         this.setState({data: data});
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.error(this.props.url, status, err.toString());
       }.bind(this)
     });
   },

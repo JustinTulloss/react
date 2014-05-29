@@ -1,5 +1,5 @@
 /**
- * Copyright 2013 Facebook, Inc.
+ * Copyright 2013-2014 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 var ReactComponent = require('ReactComponent');
 var ReactContext = require('ReactContext');
 var ReactCurrentOwner = require('ReactCurrentOwner');
+var ReactDescriptor = require('ReactDescriptor');
+var ReactEmptyComponent = require('ReactEmptyComponent');
 var ReactErrorUtils = require('ReactErrorUtils');
 var ReactOwner = require('ReactOwner');
 var ReactPerf = require('ReactPerf');
@@ -29,12 +31,15 @@ var ReactPropTypeLocations = require('ReactPropTypeLocations');
 var ReactPropTypeLocationNames = require('ReactPropTypeLocationNames');
 var ReactUpdates = require('ReactUpdates');
 
+var instantiateReactComponent = require('instantiateReactComponent');
 var invariant = require('invariant');
 var keyMirror = require('keyMirror');
 var merge = require('merge');
 var mixInto = require('mixInto');
-var objMap = require('objMap');
+var monitorCodeUse = require('monitorCodeUse');
+var mapObject = require('mapObject');
 var shouldUpdateReactComponent = require('shouldUpdateReactComponent');
+var warning = require('warning');
 
 /**
  * Policies that describe methods in `ReactCompositeComponentInterface`.
@@ -60,6 +65,9 @@ var SpecPolicy = keyMirror({
    */
   DEFINE_MANY_MERGED: null
 });
+
+
+var injectedMixins = [];
 
 /**
  * Composite components are higher-level components that compose other composite
@@ -321,7 +329,7 @@ var ReactCompositeComponentInterface = {
  */
 var RESERVED_SPEC_KEYS = {
   displayName: function(ConvenienceConstructor, displayName) {
-    ConvenienceConstructor.componentConstructor.displayName = displayName;
+    ConvenienceConstructor.type.displayName = displayName;
   },
   mixins: function(ConvenienceConstructor, mixins) {
     if (mixins) {
@@ -331,7 +339,7 @@ var RESERVED_SPEC_KEYS = {
     }
   },
   childContextTypes: function(ConvenienceConstructor, childContextTypes) {
-    var Constructor = ConvenienceConstructor.componentConstructor;
+    var Constructor = ConvenienceConstructor.type;
     validateTypeDef(
       Constructor,
       childContextTypes,
@@ -343,7 +351,7 @@ var RESERVED_SPEC_KEYS = {
     );
   },
   contextTypes: function(ConvenienceConstructor, contextTypes) {
-    var Constructor = ConvenienceConstructor.componentConstructor;
+    var Constructor = ConvenienceConstructor.type;
     validateTypeDef(
       Constructor,
       contextTypes,
@@ -352,7 +360,7 @@ var RESERVED_SPEC_KEYS = {
     Constructor.contextTypes = merge(Constructor.contextTypes, contextTypes);
   },
   propTypes: function(ConvenienceConstructor, propTypes) {
-    var Constructor = ConvenienceConstructor.componentConstructor;
+    var Constructor = ConvenienceConstructor.type;
     validateTypeDef(
       Constructor,
       propTypes,
@@ -381,7 +389,9 @@ function validateTypeDef(Constructor, typeDef, location) {
 }
 
 function validateMethodOverride(proto, name) {
-  var specPolicy = ReactCompositeComponentInterface[name];
+  var specPolicy = ReactCompositeComponentInterface.hasOwnProperty(name) ?
+    ReactCompositeComponentInterface[name] :
+    null;
 
   // Disallow overriding of base class methods unless explicitly allowed.
   if (ReactCompositeComponentMixin.hasOwnProperty(name)) {
@@ -431,21 +441,21 @@ function validateLifeCycleOnReplaceState(instance) {
  */
 function mixSpecIntoComponent(ConvenienceConstructor, spec) {
   invariant(
-    !isValidClass(spec),
+    !ReactDescriptor.isValidFactory(spec),
     'ReactCompositeComponent: You\'re attempting to ' +
     'use a component class as a mixin. Instead, just use a regular object.'
   );
   invariant(
-    !ReactComponent.isValidComponent(spec),
+    !ReactDescriptor.isValidDescriptor(spec),
     'ReactCompositeComponent: You\'re attempting to ' +
     'use a component as a mixin. Instead, just use a regular object.'
   );
 
-  var Constructor = ConvenienceConstructor.componentConstructor;
+  var Constructor = ConvenienceConstructor.type;
   var proto = Constructor.prototype;
   for (var name in spec) {
     var property = spec[name];
-    if (!spec.hasOwnProperty(name) || !property) {
+    if (!spec.hasOwnProperty(name)) {
       continue;
     }
 
@@ -458,14 +468,15 @@ function mixSpecIntoComponent(ConvenienceConstructor, spec) {
       // The following member methods should not be automatically bound:
       // 1. Expected ReactCompositeComponent methods (in the "interface").
       // 2. Overridden methods (that were mixed in).
-      var isCompositeComponentMethod = name in ReactCompositeComponentInterface;
-      var isInherited = name in proto;
-      var markedDontBind = property.__reactDontBind;
+      var isCompositeComponentMethod =
+        ReactCompositeComponentInterface.hasOwnProperty(name);
+      var isAlreadyDefined = proto.hasOwnProperty(name);
+      var markedDontBind = property && property.__reactDontBind;
       var isFunction = typeof property === 'function';
       var shouldAutoBind =
         isFunction &&
         !isCompositeComponentMethod &&
-        !isInherited &&
+        !isAlreadyDefined &&
         !markedDontBind;
 
       if (shouldAutoBind) {
@@ -475,17 +486,37 @@ function mixSpecIntoComponent(ConvenienceConstructor, spec) {
         proto.__reactAutoBindMap[name] = property;
         proto[name] = property;
       } else {
-        if (isInherited) {
+        if (isAlreadyDefined) {
+          var specPolicy = ReactCompositeComponentInterface[name];
+
+          // These cases should already be caught by validateMethodOverride
+          invariant(
+            isCompositeComponentMethod && (
+              specPolicy === SpecPolicy.DEFINE_MANY_MERGED ||
+              specPolicy === SpecPolicy.DEFINE_MANY
+            ),
+            'ReactCompositeComponent: Unexpected spec policy %s for key %s ' +
+            'when mixing in component specs.',
+            specPolicy,
+            name
+          );
+
           // For methods which are defined more than once, call the existing
-          // methods before calling the new property.
-          if (ReactCompositeComponentInterface[name] ===
-              SpecPolicy.DEFINE_MANY_MERGED) {
+          // methods before calling the new property, merging if appropriate.
+          if (specPolicy === SpecPolicy.DEFINE_MANY_MERGED) {
             proto[name] = createMergedResultFunction(proto[name], property);
-          } else {
+          } else if (specPolicy === SpecPolicy.DEFINE_MANY) {
             proto[name] = createChainedFunction(proto[name], property);
           }
         } else {
           proto[name] = property;
+          if (__DEV__) {
+            // Add verbose displayName to the function, which helps when looking
+            // at profiling tools.
+            if (typeof property === 'function' && spec.displayName) {
+              proto[name].displayName = spec.displayName + '_' + name;
+            }
+          }
         }
       }
     }
@@ -498,8 +529,8 @@ function mixStaticSpecIntoComponent(ConvenienceConstructor, statics) {
   }
   for (var name in statics) {
     var property = statics[name];
-    if (!statics.hasOwnProperty(name) || !property) {
-      return;
+    if (!statics.hasOwnProperty(name)) {
+      continue;
     }
 
     var isInherited = name in ConvenienceConstructor;
@@ -519,7 +550,7 @@ function mixStaticSpecIntoComponent(ConvenienceConstructor, statics) {
       result = createChainedFunction(existingProperty, property);
     }
     ConvenienceConstructor[name] = result;
-    ConvenienceConstructor.componentConstructor[name] = result;
+    ConvenienceConstructor.type[name] = result;
   }
 }
 
@@ -536,7 +567,7 @@ function mergeObjectsWithNoDuplicateKeys(one, two) {
     'mergeObjectsWithNoDuplicateKeys(): Cannot merge non-objects'
   );
 
-  objMap(two, function(value, key) {
+  mapObject(two, function(value, key) {
     invariant(
       one[key] === undefined,
       'mergeObjectsWithNoDuplicateKeys(): ' +
@@ -641,21 +672,21 @@ var ReactCompositeComponentMixin = {
   /**
    * Base constructor for all composite component.
    *
-   * @param {?object} initialProps
-   * @param {*} children
+   * @param {ReactDescriptor} descriptor
    * @final
    * @internal
    */
-  construct: function(initialProps, children) {
+  construct: function(descriptor) {
     // Children can be either an array or more than one argument
     ReactComponent.Mixin.construct.apply(this, arguments);
+    ReactOwner.Mixin.construct.apply(this, arguments);
 
     this.state = null;
     this._pendingState = null;
 
-    this.context = this._processContext(ReactContext.current);
-    this._currentContext = ReactContext.current;
-    this._pendingContext = null;
+    // This is the public post-processed context. The real context and pending
+    // context lives on the descriptor.
+    this.context = null;
 
     this._compositeLifeCycleState = null;
   },
@@ -675,7 +706,7 @@ var ReactCompositeComponentMixin = {
    * Initializes the component, renders markup, and registers event listeners.
    *
    * @param {string} rootID DOM ID of the root node.
-   * @param {ReactReconcileTransaction} transaction
+   * @param {ReactReconcileTransaction|ReactServerRenderingTransaction} transaction
    * @param {number} mountDepth number of components in the owner hierarchy
    * @return {?string} Rendered markup to be inserted into the DOM.
    * @final
@@ -693,6 +724,7 @@ var ReactCompositeComponentMixin = {
       );
       this._compositeLifeCycleState = CompositeLifeCycle.MOUNTING;
 
+      this.context = this._processContext(this._descriptor._context);
       this._defaultProps = this.getDefaultProps ? this.getDefaultProps() : null;
       this.props = this._processProps(this.props);
 
@@ -720,7 +752,9 @@ var ReactCompositeComponentMixin = {
         }
       }
 
-      this._renderedComponent = this._renderValidatedComponent();
+      this._renderedComponent = instantiateReactComponent(
+        this._renderValidatedComponent()
+      );
 
       // Done with mounting, `setState` will now trigger UI changes.
       this._compositeLifeCycleState = null;
@@ -730,7 +764,7 @@ var ReactCompositeComponentMixin = {
         mountDepth + 1
       );
       if (this.componentDidMount) {
-        transaction.getReactMountReady().enqueue(this, this.componentDidMount);
+        transaction.getReactMountReady().enqueue(this.componentDidMount, this);
       }
       return markup;
     }
@@ -755,10 +789,6 @@ var ReactCompositeComponentMixin = {
     this._renderedComponent = null;
 
     ReactComponent.Mixin.unmountComponent.call(this);
-
-    if (this.refs) {
-      this.refs = null;
-    }
 
     // Some existing components rely on this.props even after they've been
     // destroyed (in event handlers).
@@ -789,12 +819,11 @@ var ReactCompositeComponentMixin = {
       'setState(...): takes an object of state variables to update.'
     );
     if (__DEV__){
-      if (partialState == null) {
-        console.warn(
-          'setState(...): You passed an undefined or null state object; ' +
-          'instead, use forceUpdate().'
-        );
-      }
+      warning(
+        partialState != null,
+        'setState(...): You passed an undefined or null state object; ' +
+        'instead, use forceUpdate().'
+      );
     }
     // Merge with `_pendingState` if it exists, otherwise with existing state.
     this.replaceState(
@@ -837,11 +866,13 @@ var ReactCompositeComponentMixin = {
       for (var contextName in contextTypes) {
         maskedContext[contextName] = context[contextName];
       }
-      this._checkPropTypes(
-        contextTypes,
-        maskedContext,
-        ReactPropTypeLocations.context
-      );
+      if (__DEV__) {
+        this._checkPropTypes(
+          contextTypes,
+          maskedContext,
+          ReactPropTypeLocations.context
+        );
+      }
     }
     return maskedContext;
   },
@@ -861,11 +892,13 @@ var ReactCompositeComponentMixin = {
         'use getChildContext().',
         displayName
       );
-      this._checkPropTypes(
-        this.constructor.childContextTypes,
-        childContext,
-        ReactPropTypeLocations.childContext
-      );
+      if (__DEV__) {
+        this._checkPropTypes(
+          this.constructor.childContextTypes,
+          childContext,
+          ReactPropTypeLocations.childContext
+        );
+      }
       for (var name in childContext) {
         invariant(
           name in this.constructor.childContextTypes,
@@ -892,13 +925,16 @@ var ReactCompositeComponentMixin = {
     var props = merge(newProps);
     var defaultProps = this._defaultProps;
     for (var propName in defaultProps) {
-      if (typeof props[propName] === 'undefined') {
+      if (!props.hasOwnProperty(propName) ||
+          typeof props[propName] === 'undefined') {
         props[propName] = defaultProps[propName];
       }
     }
-    var propTypes = this.constructor.propTypes;
-    if (propTypes) {
-      this._checkPropTypes(propTypes, props, ReactPropTypeLocations.prop);
+    if (__DEV__) {
+      var propTypes = this.constructor.propTypes;
+      if (propTypes) {
+        this._checkPropTypes(propTypes, props, ReactPropTypeLocations.prop);
+      }
     }
     return props;
   },
@@ -915,12 +951,23 @@ var ReactCompositeComponentMixin = {
     var componentName = this.constructor.displayName;
     for (var propName in propTypes) {
       if (propTypes.hasOwnProperty(propName)) {
-        propTypes[propName](props, propName, componentName, location);
+        var error =
+          propTypes[propName](props, propName, componentName, location);
+        if (error instanceof Error) {
+          warning(false, error.message);
+        }
       }
     }
   },
 
-  performUpdateIfNecessary: function() {
+  /**
+   * If any of `_pendingDescriptor`, `_pendingState`, or `_pendingForceUpdate`
+   * is set, update the component.
+   *
+   * @param {ReactReconcileTransaction} transaction
+   * @internal
+   */
+  performUpdateIfNecessary: function(transaction) {
     var compositeLifeCycleState = this._compositeLifeCycleState;
     // Do not trigger a state transition if we are in the middle of mounting or
     // receiving props because both of those will already be doing this.
@@ -928,32 +975,21 @@ var ReactCompositeComponentMixin = {
         compositeLifeCycleState === CompositeLifeCycle.RECEIVING_PROPS) {
       return;
     }
-    ReactComponent.Mixin.performUpdateIfNecessary.call(this);
-  },
 
-  /**
-   * If any of `_pendingProps`, `_pendingState`, or `_pendingForceUpdate` is
-   * set, update the component.
-   *
-   * @param {ReactReconcileTransaction} transaction
-   * @internal
-   */
-  _performUpdateIfNecessary: function(transaction) {
-    if (this._pendingProps == null &&
+    if (this._pendingDescriptor == null &&
         this._pendingState == null &&
-        this._pendingContext == null &&
         !this._pendingForceUpdate) {
       return;
     }
 
-    var nextFullContext = this._pendingContext || this._currentContext;
-    var nextContext = this._processContext(nextFullContext);
-    this._pendingContext = null;
-
+    var nextContext = this.context;
     var nextProps = this.props;
-    if (this._pendingProps != null) {
-      nextProps = this._processProps(this._pendingProps);
-      this._pendingProps = null;
+    var nextDescriptor = this._descriptor;
+    if (this._pendingDescriptor != null) {
+      nextDescriptor = this._pendingDescriptor;
+      nextContext = this._processContext(nextDescriptor._context);
+      nextProps = this._processProps(nextDescriptor.props);
+      this._pendingDescriptor = null;
 
       this._compositeLifeCycleState = CompositeLifeCycle.RECEIVING_PROPS;
       if (this.componentWillReceiveProps) {
@@ -962,12 +998,6 @@ var ReactCompositeComponentMixin = {
     }
 
     this._compositeLifeCycleState = CompositeLifeCycle.RECEIVING_STATE;
-
-    // Unlike props, state, and context, we specifically don't want to set
-    // _pendingOwner to null here because it's possible for a component to have
-    // a null owner, so we instead make `this._owner === this._pendingOwner`
-    // mean that there's no owner change pending.
-    var nextOwner = this._pendingOwner;
 
     var nextState = this._pendingState || this.state;
     this._pendingState = null;
@@ -979,24 +1009,24 @@ var ReactCompositeComponentMixin = {
         this._pendingForceUpdate = false;
         // Will set `this.props`, `this.state` and `this.context`.
         this._performComponentUpdate(
+          nextDescriptor,
           nextProps,
-          nextOwner,
           nextState,
-          nextFullContext,
           nextContext,
           transaction
         );
       } else {
         // If it's determined that a component should not update, we still want
         // to set props and state.
+        this._descriptor = nextDescriptor;
         this.props = nextProps;
-        this._owner = nextOwner;
         this.state = nextState;
-        this._currentContext = nextFullContext;
         this.context = nextContext;
+
+        // Owner cannot change because shouldUpdateReactComponent doesn't allow
+        // it. TODO: Remove this._owner completely.
+        this._owner = nextDescriptor._owner;
       }
-    } catch (e) {
-      throw e;
     } finally {
       this._compositeLifeCycleState = null;
     }
@@ -1006,24 +1036,22 @@ var ReactCompositeComponentMixin = {
    * Merges new props and state, notifies delegate methods of update and
    * performs update.
    *
-   * @param {object} nextProps Next object to set as properties.
-   * @param {?ReactComponent} nextOwner Next component to set as owner
+   * @param {ReactDescriptor} nextDescriptor Next descriptor
+   * @param {object} nextProps Next public object to set as properties.
    * @param {?object} nextState Next object to set as state.
-   * @param {?object} nextFullContext Next object to set as _currentContext.
-   * @param {?object} nextContext Next object to set as context.
+   * @param {?object} nextContext Next public object to set as context.
    * @param {ReactReconcileTransaction} transaction
    * @private
    */
   _performComponentUpdate: function(
+    nextDescriptor,
     nextProps,
-    nextOwner,
     nextState,
-    nextFullContext,
     nextContext,
     transaction
   ) {
+    var prevDescriptor = this._descriptor;
     var prevProps = this.props;
-    var prevOwner = this._owner;
     var prevState = this.state;
     var prevContext = this.context;
 
@@ -1031,33 +1059,44 @@ var ReactCompositeComponentMixin = {
       this.componentWillUpdate(nextProps, nextState, nextContext);
     }
 
+    this._descriptor = nextDescriptor;
     this.props = nextProps;
-    this._owner = nextOwner;
     this.state = nextState;
-    this._currentContext = nextFullContext;
     this.context = nextContext;
+
+    // Owner cannot change because shouldUpdateReactComponent doesn't allow
+    // it. TODO: Remove this._owner completely.
+    this._owner = nextDescriptor._owner;
 
     this.updateComponent(
       transaction,
-      prevProps,
-      prevOwner,
-      prevState,
-      prevContext
+      prevDescriptor
     );
 
     if (this.componentDidUpdate) {
       transaction.getReactMountReady().enqueue(
-        this,
-        this.componentDidUpdate.bind(this, prevProps, prevState, prevContext)
+        this.componentDidUpdate.bind(this, prevProps, prevState, prevContext),
+        this
       );
     }
   },
 
-  receiveComponent: function(nextComponent, transaction) {
-    this._pendingContext = nextComponent._currentContext;
+  receiveComponent: function(nextDescriptor, transaction) {
+    if (nextDescriptor === this._descriptor &&
+        nextDescriptor._owner != null) {
+      // Since descriptors are immutable after the owner is rendered,
+      // we can do a cheap identity compare here to determine if this is a
+      // superfluous reconcile. It's possible for state to be mutable but such
+      // change should trigger an update of the owner which would recreate
+      // the descriptor. We explicitly check for the existence of an owner since
+      // it's possible for a descriptor created outside a composite to be
+      // deeply mutated and reused.
+      return;
+    }
+
     ReactComponent.Mixin.receiveComponent.call(
       this,
-      nextComponent,
+      nextDescriptor,
       transaction
     );
   },
@@ -1069,39 +1108,37 @@ var ReactCompositeComponentMixin = {
    * Sophisticated clients may wish to override this.
    *
    * @param {ReactReconcileTransaction} transaction
-   * @param {object} prevProps
-   * @param {?ReactComponent} prevOwner
-   * @param {?object} prevState
-   * @param {?object} prevContext
+   * @param {ReactDescriptor} prevDescriptor
    * @internal
    * @overridable
    */
   updateComponent: ReactPerf.measure(
     'ReactCompositeComponent',
     'updateComponent',
-    function(transaction, prevProps, prevOwner, prevState, prevContext) {
+    function(transaction, prevParentDescriptor) {
       ReactComponent.Mixin.updateComponent.call(
         this,
         transaction,
-        prevProps,
-        prevOwner
+        prevParentDescriptor
       );
-      var prevComponent = this._renderedComponent;
-      var nextComponent = this._renderValidatedComponent();
-      if (shouldUpdateReactComponent(prevComponent, nextComponent)) {
-        prevComponent.receiveComponent(nextComponent, transaction);
+
+      var prevComponentInstance = this._renderedComponent;
+      var prevDescriptor = prevComponentInstance._descriptor;
+      var nextDescriptor = this._renderValidatedComponent();
+      if (shouldUpdateReactComponent(prevDescriptor, nextDescriptor)) {
+        prevComponentInstance.receiveComponent(nextDescriptor, transaction);
       } else {
         // These two IDs are actually the same! But nothing should rely on that.
         var thisID = this._rootNodeID;
-        var prevComponentID = prevComponent._rootNodeID;
-        prevComponent.unmountComponent();
-        this._renderedComponent = nextComponent;
-        var nextMarkup = nextComponent.mountComponent(
+        var prevComponentID = prevComponentInstance._rootNodeID;
+        prevComponentInstance.unmountComponent();
+        this._renderedComponent = instantiateReactComponent(nextDescriptor);
+        var nextMarkup = this._renderedComponent.mountComponent(
           thisID,
           transaction,
           this._mountDepth + 1
         );
-        ReactComponent.DOMIDOperations.dangerouslyReplaceNodeWithMarkupByID(
+        ReactComponent.BackendIDOperations.dangerouslyReplaceNodeWithMarkupByID(
           prevComponentID,
           nextMarkup
         );
@@ -1144,28 +1181,37 @@ var ReactCompositeComponentMixin = {
   /**
    * @private
    */
-  _renderValidatedComponent: function() {
-    var renderedComponent;
-    var previousContext = ReactContext.current;
-    ReactContext.current = this._processChildContext(this._currentContext);
-    ReactCurrentOwner.current = this;
-    try {
-      renderedComponent = this.render();
-    } catch (error) {
-      // IE8 requires `catch` in order to use `finally`.
-      throw error;
-    } finally {
-      ReactContext.current = previousContext;
-      ReactCurrentOwner.current = null;
+  _renderValidatedComponent: ReactPerf.measure(
+    'ReactCompositeComponent',
+    '_renderValidatedComponent',
+    function() {
+      var renderedComponent;
+      var previousContext = ReactContext.current;
+      ReactContext.current = this._processChildContext(
+        this._descriptor._context
+      );
+      ReactCurrentOwner.current = this;
+      try {
+        renderedComponent = this.render();
+        if (renderedComponent === null || renderedComponent === false) {
+          renderedComponent = ReactEmptyComponent.getEmptyComponent();
+          ReactEmptyComponent.registerNullComponentID(this._rootNodeID);
+        } else {
+          ReactEmptyComponent.deregisterNullComponentID(this._rootNodeID);
+        }
+      } finally {
+        ReactContext.current = previousContext;
+        ReactCurrentOwner.current = null;
+      }
+      invariant(
+        ReactDescriptor.isValidDescriptor(renderedComponent),
+        '%s.render(): A valid ReactComponent must be returned. You may have ' +
+          'returned undefined, an array or some other invalid object.',
+        this.constructor.displayName || 'ReactCompositeComponent'
+      );
+      return renderedComponent;
     }
-    invariant(
-      ReactComponent.isValidComponent(renderedComponent),
-      '%s.render(): A valid ReactComponent must be returned. You may have ' +
-      'returned null, undefined, an array, or some other invalid object.',
-      this.constructor.displayName || 'ReactCompositeComponent'
-    );
-    return renderedComponent;
-  },
+  ),
 
   /**
    * @private
@@ -1205,11 +1251,13 @@ var ReactCompositeComponentMixin = {
         // ignore the value of "this" that the user is trying to use, so
         // let's warn.
         if (newThis !== component && newThis !== null) {
+          monitorCodeUse('react_bind_warning', { component: componentName });
           console.warn(
             'bind(): React component methods may only be bound to the ' +
             'component instance. See ' + componentName
           );
         } else if (!args.length) {
+          monitorCodeUse('react_bind_warning', { component: componentName });
           console.warn(
             'bind(): You are binding a component method to the component. ' +
             'React does this for you automatically in a high-performance ' +
@@ -1235,18 +1283,6 @@ mixInto(ReactCompositeComponentBase, ReactPropTransferer.Mixin);
 mixInto(ReactCompositeComponentBase, ReactCompositeComponentMixin);
 
 /**
- * Checks if a value is a valid component constructor.
- *
- * @param {*}
- * @return {boolean}
- * @public
- */
-function isValidClass(componentClass) {
-  return componentClass instanceof Function &&
-         'componentConstructor' in componentClass &&
-         componentClass.componentConstructor instanceof Function;
-}
-/**
  * Module for creating composite components.
  *
  * @class ReactCompositeComponent
@@ -1268,18 +1304,20 @@ var ReactCompositeComponent = {
    * @public
    */
   createClass: function(spec) {
-    var Constructor = function() {};
+    var Constructor = function(props, owner) {
+      this.construct(props, owner);
+    };
     Constructor.prototype = new ReactCompositeComponentBase();
     Constructor.prototype.constructor = Constructor;
 
-    var ConvenienceConstructor = function(props, children) {
-      var instance = new Constructor();
-      instance.construct.apply(instance, arguments);
-      return instance;
-    };
-    ConvenienceConstructor.componentConstructor = Constructor;
-    Constructor.ConvenienceConstructor = ConvenienceConstructor;
-    ConvenienceConstructor.originalSpec = spec;
+    var ConvenienceConstructor = ReactDescriptor.createFactory(Constructor);
+
+    // TODO: Move statics off of the convenience constructor. That way the
+    // factory can be created independently from the main class.
+
+    injectedMixins.forEach(
+      mixSpecIntoComponent.bind(null, ConvenienceConstructor)
+    );
 
     mixSpecIntoComponent(ConvenienceConstructor, spec);
 
@@ -1290,6 +1328,10 @@ var ReactCompositeComponent = {
 
     if (__DEV__) {
       if (Constructor.prototype.componentShouldUpdate) {
+        monitorCodeUse(
+          'react_component_should_update_warning',
+          { component: spec.displayName }
+        );
         console.warn(
           (spec.displayName || 'A component') + ' has a method called ' +
           'componentShouldUpdate(). Did you mean shouldComponentUpdate()? ' +
@@ -1309,7 +1351,11 @@ var ReactCompositeComponent = {
     return ConvenienceConstructor;
   },
 
-  isValidClass: isValidClass
+  injection: {
+    injectMixin: function(mixin) {
+      injectedMixins.push(mixin);
+    }
+  }
 };
 
 module.exports = ReactCompositeComponent;
