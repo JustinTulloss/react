@@ -35,7 +35,7 @@ var DOMPropertyInjection = {
   HAS_NUMERIC_VALUE: 0x10,
   HAS_POSITIVE_NUMERIC_VALUE: 0x20 | 0x10,
   HAS_OVERLOADED_BOOLEAN_VALUE: 0x40,
-  MUST_USE_NAMESPACED_ATTRIBUTE: 0x40 | 0x20,
+  MUST_USE_NAMESPACED_ATTRIBUTE: 0x80,
 
   /**
    * Inject some specialized knowledge about the DOM. This takes a config object
@@ -217,6 +217,13 @@ var DOMProperty = {
   getPropertyName: {},
 
   /**
+   * Mapping from attributes to their required namespaces. Used for namespaced
+   * attributes with MUST_USE_NAMESPACED_ATTRIBUTE set to true.
+   * @type {Object}
+   */
+  getAttributeNamespace: {},
+
+  /**
    * Mapping from normalized names to mutation methods. This will only exist if
    * mutation cannot be set simply by the property or `setAttribute()`.
    * @type {Object}
@@ -271,6 +278,14 @@ var DOMProperty = {
    * @type {Object}
    */
   hasOverloadedBooleanValue: {},
+
+  /**
+   * Whether the property must be namespaced instead of hyphenated. Used for SVG
+   * propertiest that are namespaced. If `true`, a camelCased attribute will
+   * be namespaced instead of hyphenated.
+   * @type {Object}
+   */
+  mustUseNamespacedAttribute: {},
 
   /**
    * All of the isCustomAttribute() functions that have been injected.
